@@ -9,7 +9,7 @@ app = Flask(__name__)
 
 
 def get_file(filename: str) -> str:
-    with open(os.path.join("test-site", filename), "r") as f:
+    with open(os.path.join("assets", filename), "r") as f:
         content = f.read()
     return content
 
