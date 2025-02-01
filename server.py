@@ -1,6 +1,6 @@
 import os
 
-from flask import Flask, Response
+from flask import Flask, Response, render_template
 
 app = Flask(__name__)
 
@@ -9,19 +9,24 @@ app = Flask(__name__)
 
 
 def get_file(filename: str) -> str:
-    with open(os.path.join("test-site", filename), mode="r") as f:
+    with open(os.path.join("test-site", filename), "r") as f:
         content = f.read()
     return content
 
 
+@app.route("/")
+def index() -> str:
+    return render_template("index.html")
+
+
 @app.route("/robots.txt")
-def robots_txt():
+def robots_txt() -> Response:
     content = get_file("robots.txt")
     return Response(content, mimetype="text/plain")
 
 
 @app.route("/sitemap.xml")
-def sitemap_xml():
+def sitemap_xml() -> Response:
     content = get_file("sitemap.xml")
     return Response(content, mimetype="application/xml")
 
