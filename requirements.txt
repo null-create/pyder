@@ -3,3 +3,4 @@ parsel
 w3lib 
 tldextract 
 loguru
+flask
