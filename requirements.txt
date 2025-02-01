@@ -1,0 +1,5 @@
+httpx 
+parsel 
+w3lib 
+tldextract 
+loguru
