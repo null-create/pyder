@@ -1,11 +1,12 @@
 import re
+from httpx import Response
 
 # file for custom call backs used by the crawler class to handle various
 # discoveries and scenaries
 
 
 # TMP example callback
-def parse_product(response) -> None:
+def parse_product(response: Response) -> None:
     print(f"found product: {response.url}")
 
 

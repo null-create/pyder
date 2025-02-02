@@ -90,10 +90,8 @@ class UrlFilter:
     def __init__(
         self, domain: str = None, subdomain: str = None, follow: List[Pattern] = None
     ) -> None:
-        # restrict filtering to specific TLD
-        self.domain = domain or ""
-        # restrict filtering to sepcific subdomain
-        self.subdomain = subdomain or ""
+        self.domain = domain or ""  # restrict filtering to specific TLD
+        self.subdomain = subdomain or ""  # restrict filtering to sepcific subdomain
         self.follow = follow or []
         log.info(
             f"filter created for domain {self.subdomain}.{self.domain} with follow rules {follow}"
@@ -155,3 +153,17 @@ class UrlFilter:
             self.seen.add(canonicalize_url(url))
             found.append(url)
         return found
+
+
+class SeedUrls:
+    def __init__(self, urls_file: str) -> None:
+        """Initialize with a path to a seed_urls.txt file"""
+        with open(urls_file, "r") as f:
+            urls = f.read().splitlines()
+        self.seed_urls = urls if urls else []
+
+    def count(self) -> int:
+        return len(self.seed_urls)
+
+    def get_urls(self) -> list:
+        return self.seed_urls

@@ -1,42 +1,54 @@
 import re
-import httpx
 from urllib.parse import urljoin
 
+import httpx
+from loguru import logger as log
 
-class RobotsTxtHandler:
-    def __init__(self, base_url: str, timeout: int = 5):
+
+class Navigator:
+    def __init__(self, base_url: str, timeout: int = 5) -> None:
         """
-        Initializes the RobotsTxtClient with the base URL of the website.
+        Initializes the Navigator class with the base URL of the website.
+
+        The Navigator searches for a robots.txt file and/or a sitemap.xml file
+        to help the Crawler determine which paths within the site to try and explore.
+
         :param base_url: The website's base URL (e.g., "https://example.com/").
         :param timeout: Request timeout in seconds (default: 5).
         """
         self.base_url = base_url.rstrip("/") + "/"  # Ensure trailing slash
         self.robots_url = urljoin(self.base_url, "robots.txt")
         self.sitemap_url = urljoin(self.base_url, "sitemap.xml")
-        self.discovered_urls = []
+        self.discovered_urls = None
         self.timeout = timeout
         self.content = None
         self.rules = {}
-        self.client = httpx.Client(timeout=self.timeout, follow_redirects=True)
 
-    def __enter__(self):
+    async def __aenter__(self):
+        self.client = await httpx.AsyncClient(
+            timeout=self.timeout, follow_redirects=True
+        ).__aenter__()
         return self
 
-    def __exit__(self, exc_type, exc_value, traceback):
-        self.close()
+    async def __aexit__(self, *args, **kwargs):
+        await self.client.__aexit__(*args, **kwargs)
 
-    def fetch(self) -> None:
+    async def fetch(self) -> None:
         """Fetches the robots.txt file and sitemap.xml file from the website and store them in memory."""
         try:
-            response = self.client.get(self.robots_url)
+            response = await self.client.get(self.robots_url)
             if response.status_code == 200:
                 self.content = response.text
                 self._parse_robots_file()
-                self._parse_sitemap()
             else:
-                print(f"[-] failed to retrieve robots.txt: {response.status_code}")
+                log.warning(
+                    f"[-] failed to retrieve robots.txt: {response.status_code}"
+                )
         except httpx.RequestError as e:
-            print(f"[-] request error: {e}")
+            log.error(f"[-] request error: {e}")
+
+        except Exception as e:
+            log.error(f"[-] exception occurred: {e}")
 
     def _parse_robots_file(self) -> None:
         """Parses the robots.txt file and stores the rules in a dictionary."""
@@ -68,17 +80,22 @@ class RobotsTxtHandler:
             elif key == "sitemap":
                 self.rules[key] = value
 
-    def _parse_sitemap(self) -> list:
-        data = None
+    async def get_sitemap(self) -> list:
         try:
-            response = self.client.get(self.sitemap_url)
+            response = await self.client.get(self.sitemap_url)
             if response.status_code == 200:
-                data = response.text
+                self._parse_sitemap(response.text)
+            else:
+                log.warn(f"[-] failed to retrieve site map:\n{response.text}")
         except httpx.RequestError as e:
-            print(f"[-] request error: {e}")
+            log.error(f"[-] request error: {e}")
+        except Exception as e:
+            log.error(f"[-] exception occurred: {e}")
 
+    def _parse_sitemap(self, data: str) -> None:
+        """Parse a site map for urls to follow within a website"""
         if not data:
-            return []
+            return
         urls = []
         url_pattern = re.compile(
             r"<url>.*?<loc>(.*?)</loc>.*?(<lastmod>(.*?)</lastmod>)?.*?(<changefreq>(.*?)</changefreq>)?.*?(<priority>(.*?)</priority>)?.*?</url>",
@@ -120,6 +137,8 @@ class RobotsTxtHandler:
 
     def get_sitemap_urls(self) -> list:
         """Returns the list of urls found when parsing the sitemap.xml file"""
+        if not self.discovered_urls:
+            return []
         urls = [
             self.discovered_urls["loc"] for self.discovered_urls in self.discovered_urls
         ]
@@ -132,7 +151,7 @@ class RobotsTxtHandler:
 
 # Example usage:
 if __name__ == "__main__":
-    robots_client = RobotsTxtHandler("http://localhost:8000")
+    robots_client = Navigator("http://localhost:8000")
     robots_client.fetch()
     print("Rules for '*':", robots_client.get_rules("*"))
     print("Site urls from sitemap:", ", ".join(robots_client.get_sitemap_urls()))

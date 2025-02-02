@@ -1,5 +1,5 @@
 import asyncio
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 from typing import Callable, Dict, List, Optional, Tuple
 
 import httpx
@@ -7,7 +7,6 @@ from parsel import Selector
 from loguru import logger as log
 
 from urls import UrlFilter
-from robots import RobotsTxtHandler
 from callbacks import callbacks
 
 
@@ -31,13 +30,8 @@ class Crawler:
     def __init__(
         self, filter: UrlFilter, callbacks: Optional[Dict[str, Callable]] = None
     ) -> None:
-        self.rules = {}  # rules parsed from robots.txt file
-        self.rule_bot: RobotsTxtHandler = None  # used during scraping
         self.url_filter: UrlFilter = filter  # url filter class
         self.callbacks = callbacks or {}  # callbacks dict
-
-    def _new_rule_bot(self, base_url: str) -> None:
-        self.rule_bot = RobotsTxtHandler(base_url)
 
     def find_urls(self, responses: List[httpx.Response]) -> List[str]:
         """find valid urls in responses"""
@@ -52,15 +46,11 @@ class Crawler:
 
         urls_to_follow = self.url_filter.filter(all_unique_urls)
         log.info(
-            f"found {len(urls_to_follow)} urls to follow (from total {len(all_unique_urls)})"
+            f"[+] found {len(urls_to_follow)} urls to follow (from total {len(all_unique_urls)})"
         )
         return urls_to_follow
 
-    def get_site_rules(self) -> dict:
-        self.rule_bot.fetch()
-        return self.rule_bot.get_rules()
-
-    async def scrape_url(self, url) -> httpx.Response:
+    async def scrape_url(self, url: str) -> httpx.Response:
         return await self.session.get(url, follow_redirects=True)
 
     async def scrape(
@@ -69,8 +59,7 @@ class Crawler:
         """scrape urls and return their responses"""
         responses = []
         failures = []
-        log.info(f"scraping {len(urls)} urls")
-
+        log.info(f"[!] scraping {len(urls)} urls")
         tasks = [self.scrape_url(url) for url in urls]
         for result in await asyncio.gather(*tasks, return_exceptions=True):
             if isinstance(result, httpx.Response):
@@ -86,7 +75,7 @@ class Crawler:
         while url_pool and depth <= max_depth:
             responses, failures = await self.scrape(url_pool)
             log.info(
-                f"depth {depth}: scraped {len(responses)} pages and failed {len(failures)}"
+                f"[!] depth {depth}: scraped {len(responses)} pages and failed {len(failures)}"
             )
             url_pool = self.find_urls(responses)
             await self.callback(responses)
@@ -95,12 +84,20 @@ class Crawler:
     async def callback(self, responses: List[httpx.Response]):
         for response in responses:
             for pattern, fn in self.callbacks.items():
-                if pattern.match(str(response.url)):
-                    log.debug(f"found matching callback for {response.url}")
+                if pattern.match(str(response.url)):  # matches a url to a callback
+                    log.debug(f"[+] found matching callback for {response.url}")
                     fn(response=response)
 
 
 async def run_crawler(seed_urls: list[str], domain: str, sub_domain: str) -> None:
-    url_filter = UrlFilter(domain=domain, subdomain=sub_domain)
-    async with Crawler(url_filter, callbacks=callbacks) as crawler:
+    async with Crawler(
+        filter=UrlFilter(domain=domain, subdomain=sub_domain), callbacks=callbacks
+    ) as crawler:
         await crawler.run(seed_urls)
+
+
+if __name__ == "__main__":
+    seed_urls = ["https://scrapfly.io"]
+    domain = "scrapfly.io"
+    subdomain = ""
+    asyncio.run(run_crawler(seed_urls, domain, subdomain))
