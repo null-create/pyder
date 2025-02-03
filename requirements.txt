@@ -4,3 +4,4 @@ w3lib
 tldextract 
 loguru
 flask
+beautifulsoup4

@@ -1,21 +1,164 @@
 import re
-from httpx import Response
+from urllib.parse import urljoin, urlparse
+from typing import Callable, Dict, List, Any
 
-# file for custom call backs used by the crawler class to handle various
-# discoveries and scenaries
+import httpx
+from bs4 import BeautifulSoup, Tag
+
+# file for custom call backs defined in EXTRACTION RULES used by the
+# crawler class to handle various discoveries and scenaries
 
 
-# TMP example callback
-def parse_product(response: Response) -> None:
-    print(f"found product: {response.url}")
+# Define type alias for extraction function signatures
+ExtractionFunction = Callable[[BeautifulSoup, str], Dict[str, Any]]
 
 
-# callbacks represent a set of functions to be called
-# by the crawler, and apply a specifc operation to a discovered
-# url or element within the DOM
-# key is a regex instance to match against, value is the function
-# to call.
-callbacks = {
-    # any url that contains "/products/" is a product page
-    re.compile(".+/products/.+"): parse_product
+def extract_names(soup: BeautifulSoup, _: str) -> Dict[str, List[str]]:
+    """Extracts names from headings and paragraph tags."""
+    return {
+        "names": [
+            tag.get_text(strip=True) for tag in soup.find_all(["h1", "h2", "h3", "p"])
+        ]
+    }
+
+
+def extract_links(soup: BeautifulSoup, base_url: str) -> Dict[str, List[str]]:
+    """Extracts all links from the webpage."""
+    links = [urljoin(base_url, a["href"]) for a in soup.find_all("a", href=True)]
+    return {"links": links}
+
+
+def extract_file_downloads(soup: BeautifulSoup, base_url: str) -> Dict[str, List[str]]:
+    """Filters links for common downloadable file types."""
+    links = extract_links(soup, base_url)["links"]
+    file_extensions = (".pdf", ".zip", ".exe", ".docx", ".xlsx", ".mp4")
+    file_downloads = [
+        link
+        for link in links
+        if re.search(rf"({'|'.join(file_extensions)})$", link, re.IGNORECASE)
+    ]
+    return {"file_downloads": file_downloads}
+
+
+def extract_internal_links(soup: BeautifulSoup, base_url: str) -> Dict[str, List[str]]:
+    """Extracts internal links that belong to the same domain."""
+    parsed_base = urlparse(base_url).netloc
+    links = extract_links(soup, base_url)["links"]
+    internal_links = [link for link in links if urlparse(link).netloc == parsed_base]
+    return {"internal_links": internal_links}
+
+
+def extract_external_links(soup: BeautifulSoup, base_url: str) -> Dict[str, List[str]]:
+    """Extracts external links that belong to different domains."""
+    parsed_base = urlparse(base_url).netloc
+    links = extract_links(soup, base_url)["links"]
+    external_links = [link for link in links if urlparse(link).netloc != parsed_base]
+    return {"external_links": external_links}
+
+
+def extract_metadata(soup: BeautifulSoup, _: str) -> Dict[str, str]:
+    """Extracts metadata such as title, description, and keywords."""
+    title = soup.title.string.strip() if soup.title else "No Title"
+    description = soup.find("meta", attrs={"name": "description"})
+    keywords = soup.find("meta", attrs={"name": "keywords"})
+
+    return {
+        "title": title,
+        "description": (
+            description["content"].strip() if description else "No Description"
+        ),
+        "keywords": keywords["content"].strip() if keywords else "No Keywords",
+    }
+
+
+def extract_social_links(soup: BeautifulSoup, base_url: str) -> Dict[str, List[str]]:
+    """Extracts social media links from the webpage."""
+    social_domains = (
+        "facebook.com",
+        "twitter.com",
+        "linkedin.com",
+        "instagram.com",
+        "youtube.com",
+        "tiktok.com",
+        "bluesky.com",
+    )
+    links = extract_links(soup, base_url)["links"]
+    social_links = [
+        link for link in links if any(domain in link for domain in social_domains)
+    ]
+    return {"social_links": social_links}
+
+
+def extract_data(html: str, base_url: str) -> Dict[str, Any]:
+    """Applies extraction rules based on patterns."""
+    soup = BeautifulSoup(html, "html.parser")
+    extracted_data: Dict[str, Any] = {}
+
+    for pattern, callback in CALLBACKS.items():
+        extracted_data.update(callback(soup, base_url))
+
+    return extracted_data
+
+
+def extract_names(soup: BeautifulSoup) -> List[str]:
+    """Extracts potential names from headings and paragraph text."""
+    return [tag.get_text(strip=True) for tag in soup.find_all(["h1", "h2", "h3", "p"])]
+
+
+def search_keywords(soup: BeautifulSoup, keywords: List[str]) -> Dict[str, List[str]]:
+    """Searches for specific keywords within the webpage text and returns occurrences."""
+    text_content = soup.get_text(" ")  # Get all text with spaces
+    found_keywords: Dict[str, List[str]] = {}
+
+    for keyword in keywords:
+        pattern = re.compile(rf"\b{re.escape(keyword)}\b", re.IGNORECASE)
+        matches = pattern.finditer(text_content)
+
+        found_keywords[keyword] = [
+            f"...{text_content[max(0, match.start()-30):min(len(text_content), match.end()+30)]}..."
+            for match in matches
+        ]
+
+    return found_keywords
+
+
+async def analyze_webpage(response: httpx.Response, keywords: List[str]):
+    """Fetches a webpage and extracts names and keyword matches."""
+    try:
+        soup = BeautifulSoup(response.text, "html.parser")
+
+        names = extract_names(soup)
+        keyword_results = search_keywords(soup, keywords)
+
+        print("\nPotential Names Found:")
+        print("\n".join(names[:10]) if names else "No names found.")
+
+        print("\nKeyword Matches:")
+        for keyword, occurrences in keyword_results.items():
+            print(f"\nKeyword: {keyword}")
+            if occurrences:
+                print("\n".join(occurrences[:5]))  # Show first 5 matches
+            else:
+                print("No occurrences found.")
+
+    except httpx.HTTPError as e:
+        print(f"Error fetching page: {e}")
+
+
+CALLBACKS: Dict[str, ExtractionFunction] = {
+    r".*": extract_names,  # Extract names from text
+    r"https?://.*": extract_links,  # Extract all links
+    r".*\.(pdf|zip|exe|docx|xlsx|mp4)$": extract_file_downloads,  # Extract downloadable files
+    r"https?://.*": extract_internal_links,  # Extract internal links
+    r"https?://.*": extract_external_links,  # Extract external links
+    r".*": extract_metadata,  # Extract metadata (title, description, keywords)
+    r"https?://.*": extract_social_links,  # Extract social media links
 }
+
+# Example usage
+# if __name__ == "__main__":
+#     import asyncio
+
+#     url = input("Enter a website URL: ")
+#     keywords = input("Enter keywords to search (comma-separated): ").split(",")
+#     asyncio.run(analyze_webpage(url, [kw.strip() for kw in keywords]))

@@ -6,8 +6,8 @@ import httpx
 from parsel import Selector
 from loguru import logger as log
 
-from urls import UrlFilter
-from callbacks import callbacks
+from callbacks import CALLBACKS
+from urls import UrlFilter, get_seed_urls, get_domain, get_subdomain
 
 
 class Crawler:
@@ -28,9 +28,13 @@ class Crawler:
         await self.session.__aexit__(*args, **kwargs)
 
     def __init__(
-        self, filter: UrlFilter, callbacks: Optional[Dict[str, Callable]] = None
+        self,
+        filter: UrlFilter,
+        callbacks: Optional[Dict[str, Callable]] = None,
+        search_depth: int = None,
     ) -> None:
         self.url_filter: UrlFilter = filter  # url filter class
+        self.search_depth = search_depth or 10  # search depth for each page
         self.callbacks = callbacks or {}  # callbacks dict
 
     def find_urls(self, responses: List[httpx.Response]) -> List[str]:
@@ -68,20 +72,21 @@ class Crawler:
                 failures.append(result)
         return responses, failures
 
-    async def run(self, start_urls: List[str], max_depth=10) -> None:
+    async def run(self, start_urls: List[str]) -> None:
         """crawl target to maximum depth or until no more urls are found"""
         url_pool = start_urls
         depth = 0
-        while url_pool and depth <= max_depth:
-            responses, failures = await self.scrape(url_pool)
+        while url_pool and depth <= self.search_depth:
+            responses, failures = await self.scrape(url_pool)  # scrape url pool
             log.info(
                 f"[!] depth {depth}: scraped {len(responses)} pages and failed {len(failures)}"
             )
-            url_pool = self.find_urls(responses)
-            await self.callback(responses)
+            url_pool = self.find_urls(responses)  # find next urls to scrape
+            await self.callback(responses)  # apply callbacks to the responses
             depth += 1
 
     async def callback(self, responses: List[httpx.Response]):
+        """apply callback function to matching response URLs"""
         for response in responses:
             for pattern, fn in self.callbacks.items():
                 if pattern.match(str(response.url)):  # matches a url to a callback
@@ -91,13 +96,13 @@ class Crawler:
 
 async def run_crawler(seed_urls: list[str], domain: str, sub_domain: str) -> None:
     async with Crawler(
-        filter=UrlFilter(domain=domain, subdomain=sub_domain), callbacks=callbacks
+        filter=UrlFilter(domain=domain, subdomain=sub_domain),
+        callbacks={},  # TMP until CALLBACKS is tested
     ) as crawler:
         await crawler.run(seed_urls)
 
 
 if __name__ == "__main__":
-    seed_urls = ["https://scrapfly.io"]
-    domain = "scrapfly.io"
-    subdomain = ""
-    asyncio.run(run_crawler(seed_urls, domain, subdomain))
+    seed_urls = get_seed_urls()
+    for url in seed_urls:
+        asyncio.run(run_crawler([url], get_domain(url), get_subdomain(url)))

@@ -1,3 +1,4 @@
+import os
 import posixpath
 from typing import List, Pattern
 from urllib.parse import urlparse
@@ -167,3 +168,25 @@ class SeedUrls:
 
     def get_urls(self) -> list:
         return self.seed_urls
+
+
+def get_domain(url: str) -> str:
+    parsed_url = urlparse(url)
+    return parsed_url.netloc
+
+
+def get_subdomain(url: str) -> str:
+    extracted = tldextract.extract(url)
+    return extracted.subdomain if extracted.subdomain else None
+
+
+def get_seed_urls() -> list[str]:
+    seed_file = os.path.join("data", "seed_urls.txt")
+    if not os.path.exists(seed_file):
+        log.error(f"[-] {seed_file} not found!")
+        return
+
+    with open(seed_file, "r") as f:
+        urls = f.read().splitlines()
+
+    return urls
