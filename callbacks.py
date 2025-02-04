@@ -91,7 +91,6 @@ def extract_social_links(soup: BeautifulSoup, base_url: str) -> Dict[str, List[s
         "instagram.com",
         "youtube.com",
         "tiktok.com",
-        "bluesky.com",
     )
     links = extract_links(soup, base_url)["links"]
     social_links = [
@@ -100,20 +99,24 @@ def extract_social_links(soup: BeautifulSoup, base_url: str) -> Dict[str, List[s
     return {"social_links": social_links}
 
 
-def extract_data(html: str, base_url: str) -> Dict[str, Any]:
-    """Applies extraction rules based on patterns."""
+def extract_names(soup: BeautifulSoup, _: str) -> List[str]:
+    """Extracts potential names from headings and paragraph text."""
+    return [tag.get_text(strip=True) for tag in soup.find_all(["h1", "h2", "h3", "p"])]
+
+
+def extract_data(html: str, base_url: str, writeout: bool = True) -> Dict[str, Any]:
+    """Applies a callback based on url patterns."""
     soup = BeautifulSoup(html, "html.parser")
     extracted_data: Dict[str, Any] = {}
 
     for pattern, callback in CALLBACKS.items():
-        extracted_data.update(callback(soup, base_url))
+        if pattern.match(base_url):
+            extracted_data.update(callback(soup, base_url))
+
+    if writeout:
+        save_data_to_json(extracted_data, base_url, f"{urlparse(base_url)}.json")
 
     return extracted_data
-
-
-def extract_names(soup: BeautifulSoup) -> List[str]:
-    """Extracts potential names from headings and paragraph text."""
-    return [tag.get_text(strip=True) for tag in soup.find_all(["h1", "h2", "h3", "p"])]
 
 
 def search_keywords(soup: BeautifulSoup, keywords: List[str]) -> Dict[str, List[str]]:

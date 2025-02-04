@@ -172,12 +172,12 @@ class SeedUrls:
 
 def get_domain(url: str) -> str:
     parsed_url = urlparse(url)
-    return parsed_url.netloc
+    return parsed_url.netloc.lower()
 
 
 def get_subdomain(url: str) -> str:
     extracted = tldextract.extract(url)
-    return extracted.subdomain if extracted.subdomain else None
+    return extracted.subdomain if extracted.subdomain else ""
 
 
 def get_seed_urls() -> list[str]:

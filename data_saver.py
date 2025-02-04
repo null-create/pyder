@@ -51,7 +51,7 @@ def decompress_json_gz(file_path: str) -> str:
             data = json.load(gz_file)
 
         with open(output_path, "w", encoding="utf-8") as json_file:
-            json.dump(data, json_file, indent=4, ensure_ascii=False)
+            json.dump(data, json_file, indent=2, ensure_ascii=False)
 
         log.info(f"✅ File successfully decompressed to: {output_path}")
         return output_path
@@ -88,14 +88,17 @@ def save_data_to_json(
     try:
         if compress:
             with gzip.open(file_path, "wt", encoding="utf-8") as gz_file:
-                json.dump(data, gz_file, indent=4, ensure_ascii=False)
+                json.dump(data, gz_file, indent=2, ensure_ascii=False)
         else:
             with open(file_path, "w", encoding="utf-8") as json_file:
-                json.dump(data, json_file, indent=4, ensure_ascii=False)
+                json.dump(data, json_file, indent=2, ensure_ascii=False)
 
         log.info(f"✅ Data successfully saved to: {file_path}")
         return file_path
 
     except IOError as e:
-        log.error(f"❌ Error saving file: {e}")
+        log.error(f"❌ IOError while saving file: {e}")
         return ""
+
+    except Exception as e:
+        log.error(f"❌ Exception while saving file: {e}")

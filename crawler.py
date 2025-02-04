@@ -8,6 +8,7 @@ from loguru import logger as log
 from bs4 import BeautifulSoup
 
 from callbacks import CALLBACKS
+from data_saver import save_data_to_json
 from urls import UrlFilter, get_seed_urls, get_domain, get_subdomain
 
 
@@ -92,16 +93,21 @@ class Crawler:
             for pattern, fn in self.callbacks.items():
                 if pattern.match(str(response.url)):  # matches a url to a callback
                     log.debug(f"[+] found matching callback for {response.url}")
-                    fn(
+                    data = fn(
                         soup=BeautifulSoup(response.text, "html.parser"),
-                        base_url=urlparse(response.url),
+                        base_url=response.url,
+                    )
+                    save_data_to_json(
+                        data,
+                        get_domain(response.url),
+                        f"{get_domain(response.url)}-scrape.json",
                     )
 
 
 async def run_crawler(seed_urls: list[str], domain: str, sub_domain: str) -> None:
     async with Crawler(
         filter=UrlFilter(domain=domain, subdomain=sub_domain),
-        callbacks={},  # TMP until CALLBACKS is tested
+        callbacks=CALLBACKS,
     ) as crawler:
         await crawler.run(seed_urls)
 
