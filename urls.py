@@ -181,7 +181,7 @@ def get_subdomain(url: str) -> str:
 
 
 def get_seed_urls() -> list[str]:
-    seed_file = os.path.join("data", "seed_urls.txt")
+    seed_file = "seed_urls.txt"
     if not os.path.exists(seed_file):
         log.error(f"[-] {seed_file} not found!")
         return

@@ -5,12 +5,23 @@ from typing import Callable, Dict, List, Any
 import httpx
 from bs4 import BeautifulSoup, Tag
 
+from data_saver import save_data_to_json
+
 # file for custom call backs defined in EXTRACTION RULES used by the
 # crawler class to handle various discoveries and scenaries
 
 
 # Define type alias for extraction function signatures
 ExtractionFunction = Callable[[BeautifulSoup, str], Dict[str, Any]]
+
+
+# used for testing
+async def fetch_html(url: str) -> httpx.Response:
+    """Fetches the HTML content of the given URL using httpx."""
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
+        response.raise_for_status()
+        return response
 
 
 def extract_names(soup: BeautifulSoup, _: str) -> Dict[str, List[str]]:
@@ -122,9 +133,10 @@ def search_keywords(soup: BeautifulSoup, keywords: List[str]) -> Dict[str, List[
     return found_keywords
 
 
-async def analyze_webpage(response: httpx.Response, keywords: List[str]):
+async def analyze_webpage(url: str, keywords: List[str]) -> None:
     """Fetches a webpage and extracts names and keyword matches."""
     try:
+        response = await fetch_html(url)
         soup = BeautifulSoup(response.text, "html.parser")
 
         names = extract_names(soup)
@@ -155,10 +167,10 @@ CALLBACKS: Dict[str, ExtractionFunction] = {
     r"https?://.*": extract_social_links,  # Extract social media links
 }
 
-# Example usage
-# if __name__ == "__main__":
-#     import asyncio
+if __name__ == "__main__":
+    import asyncio
 
-#     url = input("Enter a website URL: ")
-#     keywords = input("Enter keywords to search (comma-separated): ").split(",")
-#     asyncio.run(analyze_webpage(url, [kw.strip() for kw in keywords]))
+    url = input("Enter a website URL: ")
+    keywords = input("Enter keywords to search (comma-separated): ").split(",")
+
+    asyncio.run(analyze_webpage(url, [kw.strip() for kw in keywords]))

@@ -5,6 +5,7 @@ from typing import Callable, Dict, List, Optional, Tuple
 import httpx
 from parsel import Selector
 from loguru import logger as log
+from bs4 import BeautifulSoup
 
 from callbacks import CALLBACKS
 from urls import UrlFilter, get_seed_urls, get_domain, get_subdomain
@@ -33,7 +34,7 @@ class Crawler:
         callbacks: Optional[Dict[str, Callable]] = None,
         search_depth: int = None,
     ) -> None:
-        self.url_filter: UrlFilter = filter  # url filter class
+        self.url_filter = filter  # url filter class
         self.search_depth = search_depth or 10  # search depth for each page
         self.callbacks = callbacks or {}  # callbacks dict
 
@@ -91,7 +92,10 @@ class Crawler:
             for pattern, fn in self.callbacks.items():
                 if pattern.match(str(response.url)):  # matches a url to a callback
                     log.debug(f"[+] found matching callback for {response.url}")
-                    fn(response=response)
+                    fn(
+                        soup=BeautifulSoup(response.text, "html.parser"),
+                        base_url=urlparse(response.url),
+                    )
 
 
 async def run_crawler(seed_urls: list[str], domain: str, sub_domain: str) -> None:
