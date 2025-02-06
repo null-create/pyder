@@ -6,6 +6,7 @@ COPY . /app
 
 RUN apt-get update -y && apt-get upgrade -y 
 RUN pip install -r requirements.txt --no-cache
+RUN rm -rf venv .venv 
 
 EXPOSE 55555
 

@@ -3,16 +3,16 @@ from urllib.parse import urljoin, urlparse
 from typing import Callable, Dict, List, Any
 
 import httpx
-from bs4 import BeautifulSoup, Tag
+from bs4 import BeautifulSoup
 
-from data_saver import save_data_to_json
+from data import save_data_to_json
 
 # file for custom call backs defined in EXTRACTION RULES used by the
 # crawler class to handle various discoveries and scenaries
 
 
 # Define type alias for extraction function signatures
-ExtractionFunction = Callable[[BeautifulSoup, str], Dict[str, Any]]
+CallbackFunction = Callable[[BeautifulSoup, str], Dict[str, Any]]
 
 
 # used for testing
@@ -24,7 +24,7 @@ async def fetch_html(url: str) -> httpx.Response:
         return response
 
 
-def extract_names(soup: BeautifulSoup, _: str) -> Dict[str, List[str]]:
+def extract_names(soup: BeautifulSoup, _: str = "") -> Dict[str, List[str]]:
     """Extracts names from headings and paragraph tags."""
     return {
         "names": [
@@ -37,6 +37,14 @@ def extract_links(soup: BeautifulSoup, base_url: str) -> Dict[str, List[str]]:
     """Extracts all links from the webpage."""
     links = [urljoin(base_url, a["href"]) for a in soup.find_all("a", href=True)]
     return {"links": links}
+
+
+def extract_named_mentions(soup: BeautifulSoup, _: str) -> Dict[str, List[str]]:
+    """Finds mentions of the author's name in text."""
+    author_name = ""
+    text_content = soup.get_text(" ")
+    mentions = re.findall(rf"\b{re.escape(author_name)}\b", text_content, re.IGNORECASE)
+    return {"author_mentions": mentions if mentions else ["No mentions found."]}
 
 
 def extract_file_downloads(soup: BeautifulSoup, base_url: str) -> Dict[str, List[str]]:
@@ -142,11 +150,7 @@ async def analyze_webpage(url: str, keywords: List[str]) -> None:
         response = await fetch_html(url)
         soup = BeautifulSoup(response.text, "html.parser")
 
-        names = extract_names(soup)
         keyword_results = search_keywords(soup, keywords)
-
-        print("\nPotential Names Found:")
-        print("\n".join(names[:10]) if names else "No names found.")
 
         print("\nKeyword Matches:")
         for keyword, occurrences in keyword_results.items():
@@ -160,20 +164,21 @@ async def analyze_webpage(url: str, keywords: List[str]) -> None:
         print(f"Error fetching page: {e}")
 
 
-CALLBACKS: Dict[str, ExtractionFunction] = {
+CALLBACKS: Dict[str, CallbackFunction] = {
     r".*": extract_names,  # Extract names from text
+    r".*": extract_named_mentions,  # Finds author's name in text
+    r".*": extract_metadata,  # Extract metadata (title, description, keywords)
     r"https?://.*": extract_links,  # Extract all links
-    r".*\.(pdf|zip|exe|docx|xlsx|mp4)$": extract_file_downloads,  # Extract downloadable files
     r"https?://.*": extract_internal_links,  # Extract internal links
     r"https?://.*": extract_external_links,  # Extract external links
-    r".*": extract_metadata,  # Extract metadata (title, description, keywords)
     r"https?://.*": extract_social_links,  # Extract social media links
+    r".*\.(pdf|zip|exe|docx|xlsx|mp4)$": extract_file_downloads,  # Extract downloadable files
 }
 
 if __name__ == "__main__":
     import asyncio
 
-    url = input("Enter a website URL: ")
-    keywords = input("Enter keywords to search (comma-separated): ").split(",")
+    url = "https://scrapfly.io"
+    keywords = ["developers", "code", "stuff"]
 
     asyncio.run(analyze_webpage(url, [kw.strip() for kw in keywords]))

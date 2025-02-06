@@ -156,20 +156,6 @@ class UrlFilter:
         return found
 
 
-class SeedUrls:
-    def __init__(self, urls_file: str) -> None:
-        """Initialize with a path to a seed_urls.txt file"""
-        with open(urls_file, "r") as f:
-            urls = f.read().splitlines()
-        self.seed_urls = urls if urls else []
-
-    def count(self) -> int:
-        return len(self.seed_urls)
-
-    def get_urls(self) -> list:
-        return self.seed_urls
-
-
 def get_domain(url: str) -> str:
     parsed_url = urlparse(url)
     return parsed_url.netloc.lower()

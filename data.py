@@ -1,7 +1,9 @@
 import os
+import re
+import csv
 import json
 import gzip
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 from loguru import logger as log
 
@@ -25,6 +27,44 @@ def generate_unique_filename(directory: str, filename: str) -> str:
         counter += 1
 
     return unique_filename
+
+
+def preprocess_text(text: str) -> str:
+    """Cleans and normalizes text for training."""
+    text = re.sub(r"\s+", " ", text)  # Normalize whitespace
+    text = re.sub(r"[^a-zA-Z0-9.,!?;'\"]", " ", text)  # Remove unnecessary characters
+    return text.lower().strip()
+
+
+def save_data_for_training(
+    scraped_data: List[Dict[str, str]],
+    author_name: str,
+    output_file: str = "author_data.csv",
+):
+    """
+    Processes scraped data into a CSV file for training.
+
+    - `scraped_data`: List of dicts with "text" and optionally "author".
+    - `author_name`: Name of the author to label known writings.
+    - `output_file`: File to save processed data.
+    """
+    with open(output_file, "w", newline="", encoding="utf-8") as file:
+        writer = csv.writer(file)
+        writer.writerow(["text", "label"])  # CSV header
+
+        for entry in scraped_data:
+            text = preprocess_text(entry.get("text", ""))
+            if not text:
+                continue  # Skip empty text
+
+            label = (
+                "Author"
+                if entry.get("author", "").lower() == author_name.lower()
+                else "Other"
+            )
+            writer.writerow([text, label])
+
+    print(f"Processed data saved to {output_file}")
 
 
 def decompress_json_gz(file_path: str) -> str:

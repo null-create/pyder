@@ -8,7 +8,7 @@ from loguru import logger as log
 from bs4 import BeautifulSoup
 
 from callbacks import CALLBACKS
-from data_saver import save_data_to_json
+from data import save_data_to_json
 from urls import UrlFilter, get_seed_urls, get_domain, get_subdomain
 
 
