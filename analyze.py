@@ -124,7 +124,7 @@ def extract_features(text: str) -> Dict[str, float]:
 
 
 # Load dataset: A CSV file containing text samples labeled as "Author" or "Other"
-def load_training_data(file_path: str):
+def load_training_data(file_path: str) -> tuple[pd.DataFrame, pd.Series]:
     df = pd.read_csv(file_path)
     df["text"] = df["text"].apply(preprocess_text)
     df["features"] = df["text"].apply(extract_features)
@@ -133,7 +133,9 @@ def load_training_data(file_path: str):
 
 
 # Train the model
-def train_author_style_model(file_path: str, model_path: str = "author_model.pkl"):
+def train_author_style_model(
+    file_path: str, model_path: str = "author_model.pkl"
+) -> None:
     X, y = load_training_data(file_path)
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42
@@ -151,7 +153,7 @@ def train_author_style_model(file_path: str, model_path: str = "author_model.pkl
 
 
 # Load trained model and test new text
-def predict_author(text: str, model_path: str = "author_model.pkl"):
+def predict_author(text: str, model_path: str = "author_model.pkl") -> str:
     model = joblib.load(model_path)
     text = preprocess_text(text)
     features = extract_features(text)
