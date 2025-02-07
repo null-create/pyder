@@ -143,28 +143,6 @@ def extract_social_links(soup: BeautifulSoup, base_url: str) -> Dict[str, List[s
     return {"social_links": social_links}
 
 
-def extract_data(html: str, base_url: str, writeout: bool = True) -> Dict[str, Any]:
-    """Applies a callback based on url patterns."""
-    soup = BeautifulSoup(html, "html.parser")
-    extracted_data: Dict[str, Any] = {}
-
-    for pattern, extraction_fn in {
-        r".*": extract_names,  # Extract names from text
-        r".*": extract_metadata,  # Extract metadata (title, description, keywords)
-        r"https?://.*": extract_internal_links,  # Extract internal links
-        r"https?://.*": extract_external_links,  # Extract external links
-        r"https?://.*": extract_social_links,  # Extract social media links
-        r".*\.(pdf|zip|exe|docx|xlsx|mp4)$": extract_file_downloads,  # Extract downloadable files
-    }.items():
-        if pattern.match(base_url):
-            extracted_data.update(extraction_fn(soup, base_url))
-
-    if writeout:
-        save_data_to_json(extracted_data, base_url, f"{urlparse(base_url)}.json")
-
-    return extracted_data
-
-
 def extract_main_content(soup: BeautifulSoup, _: str = "") -> Dict[str, str]:
     """Extracts the main content of an article, blog post, or social media post."""
 
@@ -219,7 +197,10 @@ def search_keywords(soup: BeautifulSoup, keywords: List[str]) -> Dict[str, List[
     return found_keywords
 
 
-async def analyze_webpage(url: str, keywords: List[str]) -> None:
+# used for testing
+async def analyze_webpage(
+    soup: BeautifulSoup, url: str, keywords: List[str]
+) -> tuple[Dict[str, List[str]], list]:
     """Fetches a webpage and extracts names and keyword matches."""
     try:
         response = await fetch_html(url)
@@ -235,21 +216,28 @@ async def analyze_webpage(url: str, keywords: List[str]) -> None:
             else:
                 print("No occurrences found.")
 
+        extracted_data = []
+        for pattern, extraction_fn in DATA_EXTRACTION.items():
+            if re.match(pattern, url):
+                extracted_data.append(extraction_fn(soup, url))
+
+        return (keyword_results, extracted_data)
+
     except httpx.HTTPError as e:
         print(f"Error fetching page: {e}")
 
 
-META_DATA: Dict[str, CallbackFunction] = {
+DATA_EXTRACTION: Dict[str, CallbackFunction] = {
     r".*": extract_names,  # Extract names from text
     r".*": extract_metadata,  # Extract metadata (title, description, keywords)
     r"https?://.*": extract_internal_links,  # Extract internal links
     r"https?://.*": extract_external_links,  # Extract external links
     r"https?://.*": extract_social_links,  # Extract social media links
+    r"https?://.*": extract_main_content,  # Extract main site content
     r".*\.(pdf|zip|exe|docx|xlsx|mp4)$": extract_file_downloads,  # Extract downloadable files
 }
 
-DATA_EXTRACTION: Dict[str, CallbackFunction] = {r"https?://.*": extract_data}
-
+# Example usage
 if __name__ == "__main__":
     import asyncio
 

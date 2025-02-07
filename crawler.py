@@ -1,15 +1,23 @@
+import re
 import asyncio
 from urllib.parse import urljoin, urlparse
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple, Any, Optional
 
 import httpx
+from httpx import Response
 from parsel import Selector
 from loguru import logger as log
 from bs4 import BeautifulSoup
+from keras.api.preprocessing.sequence import pad_sequences
 
-from callbacks import META_DATA
-from data import save_data_to_json
-from urls import UrlFilter, get_seed_urls, get_domain, get_subdomain
+from analyze import load_trained_model
+from data import DataHandler, get_keywords
+from callbacks import DATA_EXTRACTION, CallbackFunction
+from urls import UrlFilter, get_seed_urls, generate_url_filters
+
+# Crawler modes
+DISCOVERY = "data_collection"
+DETECTION = "author_detection"
 
 
 class Crawler:
@@ -29,24 +37,58 @@ class Crawler:
     async def __aexit__(self, *args, **kwargs):
         await self.session.__aexit__(*args, **kwargs)
 
-    # TODO: use different sets of callbacks depending on
-    # crawler mode.
-    #
-    # 'discover' for traversing pages to find data to build an
-    #  analytical model with.
-    #
-    # 'seek' for traversing pages looking for something
     def __init__(
         self,
-        filter: UrlFilter,
-        callbacks: Optional[Dict[str, Callable]] = None,
+        filters: Dict[str, UrlFilter],  # TODO: change to dict of filters
+        data_handler: DataHandler,
+        workflow: str,
+        model: Optional[Any] = None,
+        tokenizer: Optional[Any] = None,
+        callbacks: Dict[str, CallbackFunction] = None,
+        keywords: list[str] = None,
         search_depth: int = None,
         save_logs: bool = False,
     ) -> None:
-        self.url_filter = filter  # url filter class
+        self.url_filters = filters  # url filter class
+        self.data = data_handler  # data handler class
+        self.workflow = workflow  # workflow type
+        self.model = model  # pre-trained model, if applicable
+        self.tokenizer = tokenizer  # ml tokenizer
+        self.callbacks = callbacks or {}  # callbacks dict
+        self.keywords = keywords or []  # list of keywords to search for
         self.search_depth = search_depth or 10  # search depth for each page
-        self.callbacks = callbacks or {}  # discovery callbacks dict
         self.writeout = save_logs  # flag for saving json data
+
+    def predict_author(self, text: str) -> str:
+        """predicts if a given text was written by the target author."""
+        if self.tokenizer and self.workflow == DETECTION:
+            sequence = self.tokenizer.texts_to_sequences([text])
+            padded_sequence = pad_sequences(sequence, maxlen=100)
+            prediction = self.model.predict(padded_sequence)[0]
+            return "Author" if prediction > 0.5 else "Other"
+
+        else:
+            return "Author" if self.model.predict([text])[0] == 1 else "Other"
+
+    def process_responses(self, responses: list[Response]) -> None:
+        """processes the responses returned from the initial scrape."""
+        extracted_data = {"url": responses[0].url}
+
+        for response in responses:
+            for pattern, extractor_fn in self.callbacks.items():
+                if re.match(pattern, response.url):
+                    extracted_data.update(
+                        extractor_fn(
+                            BeautifulSoup(response.text, "html.parser"), response.url
+                        )
+                    )
+
+            if self.workflow == DETECTION and self.model:
+                extracted_data["author_prediction"] = self.predict_author(
+                    extracted_data.get("main_content", "")
+                )
+
+        self.data.export(extracted_data)
 
     def find_urls(self, responses: List[httpx.Response]) -> List[str]:
         """find valid urls in responses"""
@@ -59,7 +101,11 @@ class Crawler:
             )
             all_unique_urls |= _urls_in_response
 
-        urls_to_follow = self.url_filter.filter(all_unique_urls)
+        if response.url in self.url_filters:
+            urls_to_follow = self.url_filters[response.url].filter(all_unique_urls)
+        else:
+            urls_to_follow = all_unique_urls
+
         log.info(
             f"[+] found {len(urls_to_follow)} urls to follow (from total {len(all_unique_urls)})"
         )
@@ -93,30 +139,33 @@ class Crawler:
                 f"[!] depth {depth}: scraped {len(responses)} pages and failed {len(failures)}"
             )
             url_pool = self.find_urls(responses)  # find next urls to scrape
-            await self.callback(responses)  # apply callbacks to the responses
+            self.process_responses(responses)  # apply callbacks to the responses
             depth += 1
 
-    async def callback(self, responses: List[httpx.Response]) -> None:
-        """apply callback function to matching response URLs"""
-        for response in responses:
-            for pattern, fn in self.callbacks.items():
-                if pattern.match(str(response.url)):  # matches a url to a callback
-                    log.debug(f"[+] found matching callback for {response.url}")
-                    fn(
-                        soup=BeautifulSoup(response.text, "html.parser"),
-                        base_url=response.url,
-                    )
 
+async def run_crawler(
+    seed_urls: list[str],
+    workflow: str,
+    keywords: list[str] = None,
+) -> None:
+    if workflow == DETECTION:
+        model, tokenizer = load_trained_model("CHANGME", "CHANGEME")
 
-async def run_crawler(seed_urls: list[str], domain: str, sub_domain: str) -> None:
     async with Crawler(
-        filter=UrlFilter(domain=domain, subdomain=sub_domain),
-        callbacks=META_DATA,
+        filters=generate_url_filters(seed_urls),
+        data_handler=DataHandler("csv" if workflow == "data_collection" else "json"),
+        workflow=workflow,
+        model=model,
+        tokenizer=tokenizer,
+        callbacks=DATA_EXTRACTION,
+        keywords=keywords,
     ) as crawler:
         await crawler.run(seed_urls)
 
 
 if __name__ == "__main__":
+    workflow = DETECTION
+    keywords = get_keywords()
     seed_urls = get_seed_urls()
-    for url in seed_urls:
-        asyncio.run(run_crawler([url], get_domain(url), get_subdomain(url)))
+
+    asyncio.run(run_crawler(seed_urls))

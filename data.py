@@ -29,6 +29,17 @@ def generate_unique_filename(directory: str, filename: str) -> str:
     return unique_filename
 
 
+def get_keywords() -> list[str]:
+    file = "keywords.txt"
+    if not os.path.exists(file):
+        raise FileNotFoundError("keywords.txt file not found")
+
+    with open(file, "r") as f:
+        keywords = f.read().splitlines()
+
+    return keywords
+
+
 def preprocess_text(text: str) -> str:
     """Cleans and normalizes text for training."""
     text = re.sub(r"\s+", " ", text)  # Normalize whitespace
@@ -64,7 +75,7 @@ def save_data_for_training(
             )
             writer.writerow([text, label])
 
-    print(f"✅ Processed data saved to {output_file}")
+    log.info(f"✅ Processed data saved to {output_file}")
 
 
 def decompress_json_gz(file_path: str) -> str:
@@ -142,3 +153,58 @@ def save_data_to_json(
 
     except Exception as e:
         log.error(f"❌ Exception while saving file: {e}")
+
+
+class DataHandler:
+    def __init__(
+        self,
+        compress: bool = False,
+        output_format: str = "json",
+        output_file: str = "output",
+    ):
+        """Manages storing extracted data in JSON or CSV format."""
+        self.compress = compress
+        self.output_format = output_format.lower()
+        self.output_file = f"{output_file}.{self.output_format}"
+
+        # Ensure the correct file extension
+        if self.output_format not in {"json", "csv"}:
+            raise ValueError("Invalid format. Choose 'json' or 'csv'.")
+
+    def export(self, data: Dict[str, Any]) -> None:
+        """Saves extracted data to a file in the specified format."""
+        if self.output_format == "json":
+            self._save_json(data)
+        elif self.output_format == "csv":
+            self._save_csv(data)
+
+    def _save_json(self, data: Dict[str, Any]) -> None:
+        """Appends extracted data to a JSON file."""
+        try:
+            if self.compress:
+                with gzip.open(self.output_file, "wt", encoding="utf-8") as gz_file:
+                    json.dump(data, gz_file, indent=2, ensure_ascii=False)
+            else:
+                with open(self.output_file, "a", encoding="utf-8") as file:
+                    json.dump(data, file, ensure_ascii=False, indent=2)
+                    file.write("\n")
+        except Exception as e:
+            log.error(f"❌ Error saving JSON: {e}")
+
+    def _save_csv(self, data: Dict[str, Any]) -> None:
+        """Appends extracted data to a CSV file."""
+        try:
+            # Flatten nested lists/dictionaries for CSV format
+            flat_data = {
+                k: (",".join(v) if isinstance(v, list) else v) for k, v in data.items()
+            }
+            file_exists = os.path.isfile(self.output_file)
+
+            with open(self.output_file, "a", newline="", encoding="utf-8") as file:
+                writer = csv.DictWriter(file, fieldnames=flat_data.keys())
+
+                if not file_exists:  # Write header only if file is new
+                    writer.writeheader()
+                writer.writerow(flat_data)
+        except Exception as e:
+            log.error(f"❌ Error saving CSV: {e}")

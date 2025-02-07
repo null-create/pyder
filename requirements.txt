@@ -10,3 +10,5 @@ pandas
 scikit-learn 
 nltk 
 joblib
+keras
+tensorflow

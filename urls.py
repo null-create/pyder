@@ -1,6 +1,6 @@
 import os
 import posixpath
-from typing import List, Pattern
+from typing import List, Pattern, Dict
 from urllib.parse import urlparse
 
 from tldextract import tldextract
@@ -156,6 +156,22 @@ class UrlFilter:
         return found
 
 
+def generate_url_filters(urls: List[str]) -> Dict[str, UrlFilter]:
+    """create a dictionary of URL filters based off the given set of URLs"""
+    url_filters: Dict[str, UrlFilter] = {}
+
+    for url in urls:
+        parsed_url = urlparse(url)
+        base_url = f"{parsed_url.scheme}://{parsed_url.netloc}"
+        domain = get_domain(parsed_url)
+        subdomain = get_subdomain(base_url)
+
+        if base_url not in url_filters:
+            url_filters[base_url] = UrlFilter(domain, subdomain)
+
+    return url_filters
+
+
 def get_domain(url: str) -> str:
     parsed_url = urlparse(url)
     return parsed_url.netloc.lower()
@@ -169,8 +185,7 @@ def get_subdomain(url: str) -> str:
 def get_seed_urls() -> list[str]:
     seed_file = "seed_urls.txt"
     if not os.path.exists(seed_file):
-        log.error(f"[-] {seed_file} not found!")
-        return
+        raise FileNotFoundError("seed_urls.txt not found")
 
     with open(seed_file, "r") as f:
         urls = f.read().splitlines()

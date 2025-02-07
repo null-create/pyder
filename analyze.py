@@ -15,6 +15,9 @@ from sklearn.metrics import accuracy_score
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 
+# from keras.preprocessing.text import Tokenizer
+from keras.api.models import load_model
+
 from data import preprocess_text
 
 nltk.download("punkt")
@@ -125,6 +128,39 @@ def load_training_data(file_path: str) -> tuple[pd.DataFrame, pd.Series]:
     df["features"] = df["text"].apply(extract_features)
     feature_df = pd.DataFrame(df["features"].tolist())
     return feature_df, df["label"]
+
+
+def load_trained_model(model_path: str, tokenizer_path: str = None):
+    """
+    Loads a trained ML model and optional tokenizer.
+
+    :param model_path: Path to the saved model file (.pkl for ML models, .h5 for deep learning models).
+    :param tokenizer_path: Path to the tokenizer file (only for deep learning models).
+    :return: Tuple (model, tokenizer or None)
+    """
+
+    # Check if the model is a deep learning model (.h5) or a traditional ML model (.pkl)
+    if model_path.endswith(".h5"):
+        model = load_model(model_path)
+        tokenizer = None
+
+        # Load tokenizer if provided
+        if tokenizer_path:
+            with open(tokenizer_path, "rb") as file:
+                tokenizer = joblib.load(file)
+
+        log.info(f"✅ Loaded deep learning model from {model_path}")
+        return model, tokenizer
+
+    elif model_path.endswith(".pkl"):
+        model = joblib.load(model_path)
+        log.info(f"✅ Loaded ML model from {model_path}")
+        return model, None  # No tokenizer for traditional ML models
+
+    else:
+        raise ValueError(
+            "Unsupported model format. Use '.h5' for deep learning or '.pkl' for ML models."
+        )
 
 
 # Train the model
