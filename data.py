@@ -40,7 +40,7 @@ def save_data_for_training(
     scraped_data: List[Dict[str, str]],
     author_name: str,
     output_file: str = "author_data.csv",
-):
+) -> None:
     """
     Processes scraped data into a CSV file for training.
 
@@ -64,7 +64,7 @@ def save_data_for_training(
             )
             writer.writerow([text, label])
 
-    print(f"Processed data saved to {output_file}")
+    print(f"✅ Processed data saved to {output_file}")
 
 
 def decompress_json_gz(file_path: str) -> str:

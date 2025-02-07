@@ -15,16 +15,11 @@ from sklearn.metrics import accuracy_score
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 
+from data import preprocess_text
+
 nltk.download("punkt")
 nltk.download("averaged_perceptron_tagger")
 nltk.download("stopwords")
-
-
-# Preprocess text: remove special characters and tokenize
-def preprocess_text(text: str) -> str:
-    text = re.sub(r"\s+", " ", text)  # Normalize whitespace
-    text = re.sub(r"[^a-zA-Z0-9.,!?;'\"]", " ", text)  # Keep key characters
-    return text.lower().strip()
 
 
 # Define stopwords and intensifiers
@@ -146,10 +141,10 @@ def train_author_style_model(
 
     predictions = model.predict(X_test)
     accuracy = accuracy_score(y_test, predictions)
-    log.info(f"Model Accuracy: {accuracy:.2f}")
+    log.info(f"🧠 Model Accuracy: {accuracy:.2f}")
 
     joblib.dump(model, model_path)
-    print(f"Model saved as {model_path}")
+    log.info(f"✅ Model saved as {model_path}")
 
 
 # Load trained model and test new text

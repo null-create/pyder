@@ -2,10 +2,21 @@ import re
 from urllib.parse import urljoin, urlparse
 from typing import Callable, Dict, List, Any
 
+import nltk
 import httpx
 from bs4 import BeautifulSoup
 
-from data import save_data_to_json
+from nltk.tokenize import word_tokenize
+from nltk.tag import pos_tag
+from nltk.chunk import ne_chunk
+
+nltk.download("punkt")
+nltk.download("maxent_ne_chunker")
+nltk.download("words")
+nltk.download("averaged_perceptron_tagger")
+
+
+from data import save_data_to_json, save_data_for_training
 
 # file for custom call backs defined in EXTRACTION RULES used by the
 # crawler class to handle various discoveries and scenaries
@@ -24,13 +35,38 @@ async def fetch_html(url: str) -> httpx.Response:
         return response
 
 
+def is_likely_name(text: str) -> bool:
+    """Uses regex heuristics to check if a string resembles a human name."""
+    return bool(re.match(r"\b[A-Z][a-z]+ [A-Z][a-z]+\b", text))
+
+
 def extract_names(soup: BeautifulSoup, _: str = "") -> Dict[str, List[str]]:
-    """Extracts names from headings and paragraph tags."""
-    return {
-        "names": [
-            tag.get_text(strip=True) for tag in soup.find_all(["h1", "h2", "h3", "p"])
-        ]
-    }
+    """Extracts potential names of people from the webpage content using NER and regex."""
+    text_content = " ".join(
+        tag.get_text(strip=True) for tag in soup.find_all(["h1", "h2", "h3", "p"])
+    )
+
+    # Tokenize and apply Named Entity Recognition (NER)
+    words = word_tokenize(text_content)
+    pos_tags = pos_tag(words)
+    named_entities = ne_chunk(pos_tags)
+
+    # Extract named entities recognized as people
+    detected_names = []
+    for chunk in named_entities:
+        if isinstance(chunk, nltk.Tree) and chunk.label() == "PERSON":
+            name = " ".join(c[0] for c in chunk)
+            detected_names.append(name)
+
+    # Apply regex-based heuristics to detect additional names
+    regex_names = re.findall(r"\b[A-Z][a-z]+\s[A-Z][a-z]+\b", text_content)
+
+    # Combine results and remove duplicates
+    unique_names = list(
+        set(detected_names + [name for name in regex_names if is_likely_name(name)])
+    )
+
+    return {"names": unique_names if unique_names else ["No names found."]}
 
 
 def extract_links(soup: BeautifulSoup, base_url: str) -> Dict[str, List[str]]:
@@ -75,7 +111,7 @@ def extract_external_links(soup: BeautifulSoup, base_url: str) -> Dict[str, List
     return {"external_links": external_links}
 
 
-def extract_metadata(soup: BeautifulSoup, _: str) -> Dict[str, str]:
+def extract_metadata(soup: BeautifulSoup, _: str = "") -> Dict[str, str]:
     """Extracts metadata such as title, description, and keywords."""
     title = soup.title.string.strip() if soup.title else "No Title"
     description = soup.find("meta", attrs={"name": "description"})
@@ -107,24 +143,63 @@ def extract_social_links(soup: BeautifulSoup, base_url: str) -> Dict[str, List[s
     return {"social_links": social_links}
 
 
-def extract_names(soup: BeautifulSoup, _: str) -> List[str]:
-    """Extracts potential names from headings and paragraph text."""
-    return [tag.get_text(strip=True) for tag in soup.find_all(["h1", "h2", "h3", "p"])]
-
-
 def extract_data(html: str, base_url: str, writeout: bool = True) -> Dict[str, Any]:
     """Applies a callback based on url patterns."""
     soup = BeautifulSoup(html, "html.parser")
     extracted_data: Dict[str, Any] = {}
 
-    for pattern, callback in CALLBACKS.items():
+    for pattern, extraction_fn in {
+        r".*": extract_names,  # Extract names from text
+        r".*": extract_metadata,  # Extract metadata (title, description, keywords)
+        r"https?://.*": extract_internal_links,  # Extract internal links
+        r"https?://.*": extract_external_links,  # Extract external links
+        r"https?://.*": extract_social_links,  # Extract social media links
+        r".*\.(pdf|zip|exe|docx|xlsx|mp4)$": extract_file_downloads,  # Extract downloadable files
+    }.items():
         if pattern.match(base_url):
-            extracted_data.update(callback(soup, base_url))
+            extracted_data.update(extraction_fn(soup, base_url))
 
     if writeout:
         save_data_to_json(extracted_data, base_url, f"{urlparse(base_url)}.json")
 
     return extracted_data
+
+
+def extract_main_content(soup: BeautifulSoup, _: str = "") -> Dict[str, str]:
+    """Extracts the main content of an article, blog post, or social media post."""
+
+    # Try extracting from standard article-like structures
+    content_candidates = []
+
+    # Look for <article> tag first (common in blogs & news sites)
+    if soup.find("article"):
+        content_candidates.append(
+            " ".join(p.get_text(strip=True) for p in soup.find("article").find_all("p"))
+        )
+
+    # If <article> is not found, try Reddit/Medium-style posts
+    if soup.find("div", class_=re.compile(r"post|content|text|article", re.IGNORECASE)):
+        content_candidates.append(
+            " ".join(
+                p.get_text(strip=True)
+                for p in soup.find_all(
+                    "div", class_=re.compile(r"post|content|text", re.IGNORECASE)
+                )
+            )
+        )
+
+    # If still no content, fall back to <p> tags, filtering out common non-content elements
+    if not content_candidates:
+        paragraphs = [p.get_text(strip=True) for p in soup.find_all("p")]
+        filtered_paragraphs = [
+            p for p in paragraphs if len(p.split()) > 5
+        ]  # Avoid very short text like menu items
+        content_candidates.append(" ".join(filtered_paragraphs))
+
+    # Select the longest candidate as the most likely main content
+    main_content = max(content_candidates, key=len, default="No main content found.")
+
+    return {"main_content": main_content}
 
 
 def search_keywords(soup: BeautifulSoup, keywords: List[str]) -> Dict[str, List[str]]:
@@ -164,16 +239,16 @@ async def analyze_webpage(url: str, keywords: List[str]) -> None:
         print(f"Error fetching page: {e}")
 
 
-CALLBACKS: Dict[str, CallbackFunction] = {
+META_DATA: Dict[str, CallbackFunction] = {
     r".*": extract_names,  # Extract names from text
-    r".*": extract_named_mentions,  # Finds author's name in text
     r".*": extract_metadata,  # Extract metadata (title, description, keywords)
-    r"https?://.*": extract_links,  # Extract all links
     r"https?://.*": extract_internal_links,  # Extract internal links
     r"https?://.*": extract_external_links,  # Extract external links
     r"https?://.*": extract_social_links,  # Extract social media links
     r".*\.(pdf|zip|exe|docx|xlsx|mp4)$": extract_file_downloads,  # Extract downloadable files
 }
+
+DATA_EXTRACTION: Dict[str, CallbackFunction] = {r"https?://.*": extract_data}
 
 if __name__ == "__main__":
     import asyncio
