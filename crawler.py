@@ -115,7 +115,7 @@ class Crawler:
         return urls_to_follow
 
     async def scrape_url(self, url: str) -> httpx.Response:
-        return await self.session.get(url, follow_redirects=True)
+        return await self.session.get(url, follow_redirects=True, timeout=1.0)
 
     async def scrape(
         self, urls: List[str]
@@ -160,7 +160,7 @@ async def run_crawler(
         filters=generate_url_filters(seed_urls),
         data_handler=DataHandler(
             output_file="scraped-data",
-            output_format="csv" if workflow == "data_collection" else "json",
+            output_format="csv" if workflow == DISCOVERY else "json",
         ),
         workflow=workflow,
         model=model,
@@ -172,7 +172,7 @@ async def run_crawler(
 
 
 if __name__ == "__main__":
-    workflow = DATA_EXTRACTION
+    workflow = DISCOVERY
     keywords = get_keywords()
     seed_urls = get_seed_urls()
 

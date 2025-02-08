@@ -159,7 +159,7 @@ class DataHandler:
     def __init__(
         self,
         compress: bool = False,
-        output_format: str = "json",
+        output_format: str = "csv",
         output_file: str = "output",
     ):
         """Manages storing extracted data in JSON or CSV format."""
