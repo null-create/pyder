@@ -1,4 +1,5 @@
 import re
+import json
 from urllib.parse import urljoin, urlparse
 from typing import Callable, Dict, List, Any
 
@@ -220,6 +221,9 @@ async def analyze_webpage(
         for pattern, extraction_fn in DATA_EXTRACTION.items():
             if re.match(pattern, url):
                 extracted_data.append(extraction_fn(soup, url))
+
+        for data in extracted_data:
+            print(json.dumps(data, indent=2))
 
         return (keyword_results, extracted_data)
 

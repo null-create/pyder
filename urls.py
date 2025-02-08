@@ -89,10 +89,17 @@ class UrlFilter:
     ]
 
     def __init__(
-        self, domain: str = None, subdomain: str = None, follow: List[Pattern] = None
+        self,
+        hostname: str,
+        domain: str = None,
+        subdomain: str = None,
+        venture: bool = False,
+        follow: List[Pattern] = None,
     ) -> None:
+        self.hostname = hostname  # site host
         self.domain = domain or ""  # restrict filtering to specific TLD
         self.subdomain = subdomain or ""  # restrict filtering to sepcific subdomain
+        self.venture = venture  # whether to allow off-site urls
         self.follow = follow or []
         log.info(
             f"filter created for domain {self.subdomain}.{self.domain} with follow rules {follow}"
@@ -118,6 +125,9 @@ class UrlFilter:
             and parsed.subdomain == self.subdomain
         )
 
+    def is_related(self, url: str) -> bool:
+        return url.count(self.hostname) > 0
+
     def is_valid_path(self, url: str) -> bool:
         """ignore urls of undesired paths"""
         if not self.follow:
@@ -139,8 +149,11 @@ class UrlFilter:
             if not self.is_valid_scheme(url):
                 log.debug(f"drop ignored scheme {url}")
                 continue
-            if not self.is_valid_domain(url):
-                log.debug(f"drop domain missmatch {url}")
+            if self.venture and not self.is_related(url):
+                log.debug(f"drop possibly unrelated external site: {url}")
+                continue
+            if not self.venture and not self.is_valid_domain(url):
+                log.debug(f"drop offsite url {url}")
                 continue
             if not self.is_valid_ext(url):
                 log.debug(f"drop ignored extension {url}")
@@ -156,18 +169,22 @@ class UrlFilter:
         return found
 
 
-def generate_url_filters(urls: List[str]) -> Dict[str, UrlFilter]:
+def generate_url_filters(urls: List[str], venture: bool = True) -> Dict[str, UrlFilter]:
     """create a dictionary of URL filters based off the given set of URLs"""
     url_filters: Dict[str, UrlFilter] = {}
 
     for url in urls:
         parsed_url = urlparse(url)
-        base_url = f"{parsed_url.scheme}://{parsed_url.netloc}"
-        domain = get_domain(parsed_url)
-        subdomain = get_subdomain(base_url)
+        domain = get_domain(parsed_url.netloc)
+        subdomain = get_subdomain(parsed_url.netloc)
 
-        if base_url not in url_filters:
-            url_filters[base_url] = UrlFilter(domain, subdomain)
+        if parsed_url.hostname and parsed_url.hostname not in url_filters:
+            url_filters[parsed_url.hostname] = UrlFilter(
+                hostname=parsed_url.hostname,
+                domain=domain,
+                subdomain=subdomain,
+                venture=venture,
+            )
 
     return url_filters
 

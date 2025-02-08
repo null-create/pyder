@@ -182,12 +182,14 @@ class DataHandler:
         """Appends extracted data to a JSON file."""
         try:
             if self.compress:
-                with gzip.open(self.output_file, "wt", encoding="utf-8") as gz_file:
+                with gzip.open(
+                    self.output_file + ".gz", "wt", encoding="utf-8"
+                ) as gz_file:
                     json.dump(data, gz_file, indent=2, ensure_ascii=False)
             else:
                 with open(self.output_file, "a", encoding="utf-8") as file:
                     json.dump(data, file, ensure_ascii=False, indent=2)
-                    file.write("\n")
+
         except Exception as e:
             log.error(f"❌ Error saving JSON: {e}")
 

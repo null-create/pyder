@@ -76,7 +76,10 @@ class Crawler:
 
         for response in responses:
             for pattern, extractor_fn in self.callbacks.items():
-                if re.match(pattern, response.url):
+                full_url = (
+                    f"{response.url.scheme}://www.{response.url.netloc.decode('utf-8')}"
+                )
+                if re.match(pattern, full_url):
                     extracted_data.update(
                         extractor_fn(
                             BeautifulSoup(response.text, "html.parser"), response.url
@@ -101,8 +104,8 @@ class Crawler:
             )
             all_unique_urls |= _urls_in_response
 
-        if response.url in self.url_filters:
-            urls_to_follow = self.url_filters[response.url].filter(all_unique_urls)
+        if response.url.host in self.url_filters:
+            urls_to_follow = self.url_filters[response.url.host].filter(all_unique_urls)
         else:
             urls_to_follow = all_unique_urls
 
@@ -147,13 +150,18 @@ async def run_crawler(
     seed_urls: list[str],
     workflow: str,
     keywords: list[str] = None,
+    model: Optional[Any] = None,
+    tokenizer: Optional[Any] = None,
 ) -> None:
     if workflow == DETECTION:
         model, tokenizer = load_trained_model("CHANGME", "CHANGEME")
 
     async with Crawler(
         filters=generate_url_filters(seed_urls),
-        data_handler=DataHandler("csv" if workflow == "data_collection" else "json"),
+        data_handler=DataHandler(
+            output_file="scraped-data",
+            output_format="csv" if workflow == "data_collection" else "json",
+        ),
         workflow=workflow,
         model=model,
         tokenizer=tokenizer,
@@ -164,8 +172,8 @@ async def run_crawler(
 
 
 if __name__ == "__main__":
-    workflow = DETECTION
+    workflow = DATA_EXTRACTION
     keywords = get_keywords()
     seed_urls = get_seed_urls()
 
-    asyncio.run(run_crawler(seed_urls))
+    asyncio.run(run_crawler(seed_urls, workflow))

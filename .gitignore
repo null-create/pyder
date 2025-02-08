@@ -3,4 +3,5 @@ docs
 data
 old-files
 ml_practice.py
+scraped-data.json
 __pycache__
