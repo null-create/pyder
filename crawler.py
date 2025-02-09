@@ -10,6 +10,7 @@ from loguru import logger as log
 from bs4 import BeautifulSoup
 from keras.api.preprocessing.sequence import pad_sequences
 
+from model import Model
 from analyze import load_trained_model
 from data import DataHandler, get_keywords
 from callbacks import DATA_EXTRACTION, CallbackFunction
@@ -39,10 +40,10 @@ class Crawler:
 
     def __init__(
         self,
-        filters: Dict[str, UrlFilter],  # TODO: change to dict of filters
+        filters: Dict[str, UrlFilter],
         data_handler: DataHandler,
         workflow: str,
-        model: Optional[Any] = None,
+        model: Model = None,
         tokenizer: Optional[Any] = None,
         callbacks: Dict[str, CallbackFunction] = None,
         keywords: list[str] = None,
@@ -76,10 +77,7 @@ class Crawler:
 
         for response in responses:
             for pattern, extractor_fn in self.callbacks.items():
-                full_url = (
-                    f"{response.url.scheme}://www.{response.url.netloc.decode('utf-8')}"
-                )
-                if re.match(pattern, full_url):
+                if re.match(pattern, response.url.netloc.decode("utf-8")):
                     extracted_data.update(
                         extractor_fn(
                             BeautifulSoup(response.text, "html.parser"), response.url
@@ -114,7 +112,7 @@ class Crawler:
         )
         return urls_to_follow
 
-    async def scrape_url(self, url: str) -> httpx.Response:
+    async def get(self, url: str) -> httpx.Response:
         return await self.session.get(url, follow_redirects=True, timeout=1.0)
 
     async def scrape(
@@ -124,7 +122,7 @@ class Crawler:
         responses = []
         failures = []
         log.info(f"🔎 scraping {len(urls)} urls")
-        tasks = [self.scrape_url(url) for url in urls]
+        tasks = [self.get(url) for url in urls]
         for result in await asyncio.gather(*tasks, return_exceptions=True):
             if isinstance(result, httpx.Response):
                 responses.append(result)
@@ -137,12 +135,12 @@ class Crawler:
         url_pool = start_urls
         depth = 0
         while url_pool and depth <= self.search_depth:
-            responses, failures = await self.scrape(url_pool)  # scrape url pool
+            responses, failures = await self.scrape(url_pool)
             log.info(
                 f"[!] depth {depth}: scraped {len(responses)} pages and failed {len(failures)}"
             )
-            url_pool = self.find_urls(responses)  # find next urls to scrape
-            self.process_responses(responses)  # apply callbacks to the responses
+            url_pool = self.find_urls(responses)
+            self.process_responses(responses)
             depth += 1
 
 
@@ -150,7 +148,7 @@ async def run_crawler(
     seed_urls: list[str],
     workflow: str,
     keywords: list[str] = None,
-    model: Optional[Any] = None,
+    model: Model = None,
     tokenizer: Optional[Any] = None,
 ) -> None:
     if workflow == DETECTION:
@@ -176,4 +174,4 @@ if __name__ == "__main__":
     keywords = get_keywords()
     seed_urls = get_seed_urls()
 
-    asyncio.run(run_crawler(seed_urls, workflow))
+    asyncio.run(run_crawler(seed_urls, workflow, keywords))

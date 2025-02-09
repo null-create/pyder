@@ -126,7 +126,8 @@ class UrlFilter:
         )
 
     def is_related(self, url: str) -> bool:
-        return url.count(self.hostname) > 0
+        domain = get_domain(url)
+        return self.domain == domain
 
     def is_valid_path(self, url: str) -> bool:
         """ignore urls of undesired paths"""
@@ -190,8 +191,8 @@ def generate_url_filters(urls: List[str], venture: bool = True) -> Dict[str, Url
 
 
 def get_domain(url: str) -> str:
-    parsed_url = urlparse(url)
-    return parsed_url.netloc.lower()
+    extracted = tldextract.extract(url)
+    return extracted.domain if extracted.subdomain else ""
 
 
 def get_subdomain(url: str) -> str:

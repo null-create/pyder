@@ -1,5 +1,5 @@
 import re
-from typing import Dict
+from typing import Dict, List, Tuple
 from collections import Counter
 
 import joblib
@@ -15,7 +15,6 @@ from sklearn.metrics import accuracy_score
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 
-# from keras.preprocessing.text import Tokenizer
 from keras.api.models import load_model
 
 from data import preprocess_text

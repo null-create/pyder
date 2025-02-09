@@ -3,11 +3,9 @@ ENV PYTHONUNBUFFERED=0
 
 WORKDIR /app
 COPY . /app
+RUN rm -rf venv .venv 
 
 RUN apt-get update -y && apt-get upgrade -y 
 RUN pip install -r requirements.txt --no-cache
-RUN rm -rf venv .venv 
-
-EXPOSE 55555
 
 CMD ["python", "crawler.py"]
