@@ -5,12 +5,27 @@ import json
 import gzip
 from typing import Dict, Any, List
 
+import numpy as np
 from loguru import logger as log
 
 
 def ensure_directory_exists(directory: str) -> None:
     """Creates the directory if it does not exist."""
     return os.makedirs(directory, exist_ok=True)
+
+
+def get_model_and_tokenizer_filenames() -> tuple[str, str]:
+    """Retrieves model and tokenizer filenames from the environment
+
+    MODEL_FILE and TOKENIZER_FILE must be set!"""
+    model_file = os.getenv("MODEL_FILE")
+    tokenizer_file = os.getenv("TOKENIZER_FILE")
+    if not model_file or not tokenizer_file:
+        raise ValueError(
+            f"❌ Missing model file (model={model_file}) or tokenizer file (tokenizer={tokenizer_file})"
+        )
+
+    return model_file, tokenizer_file
 
 
 def generate_unique_filename(directory: str, filename: str) -> str:
@@ -32,7 +47,7 @@ def generate_unique_filename(directory: str, filename: str) -> str:
 def get_keywords() -> list[str]:
     file = "keywords.txt"
     if not os.path.exists(file):
-        raise FileNotFoundError("keywords.txt file not found")
+        raise FileNotFoundError(f"❌ {file} file not found")
 
     with open(file, "r") as f:
         keywords = f.read().splitlines()
@@ -47,10 +62,10 @@ def preprocess_text(text: str) -> str:
     return text.lower().strip()
 
 
-def save_data_for_training(
+def save_author_data_for_training(
     scraped_data: List[Dict[str, str]],
     author_name: str,
-    output_file: str = "author_data.csv",
+    output_file: str = None,
 ) -> None:
     """
     Processes scraped data into a CSV file for training.
@@ -59,6 +74,9 @@ def save_data_for_training(
     - `author_name`: Name of the author to label known writings.
     - `output_file`: File to save processed data.
     """
+    if not output_file:
+        output_file = "author_data.csv"
+
     with open(output_file, "w", newline="", encoding="utf-8") as file:
         writer = csv.writer(file)
         writer.writerow(["text", "label"])  # CSV header
@@ -112,6 +130,16 @@ def decompress_json_gz(file_path: str) -> str:
         return ""
 
 
+def save_data(
+    X_train: np.ndarray, y_train: np.ndarray, X_val: np.ndarray, y_val: np.ndarray
+) -> None:
+    """Save training data as numpy binary files"""
+    np.save("X_train.npy", X_train)
+    np.save("y_train.npy", y_train)
+    np.save("X_val.npy", X_val)
+    np.save("y_val.npy", y_val)
+
+
 def save_data_to_json(
     data: Dict[str, Any], directory: str, filename: str, compress: bool = False
 ) -> str:
@@ -160,32 +188,41 @@ class DataHandler:
         self,
         compress: bool = False,
         output_format: str = "csv",
-        output_file: str = "output",
+        output_file_name: str = "output",
     ):
-        """Manages storing extracted data in JSON or CSV format."""
+        """Manages caching and storing extracted data to JSON or CSV format."""
         self.compress = compress
+        self.output: list[Dict[str, Any]]  # cached data to be written out
         self.output_format = output_format.lower()
-        self.output_file = f"{output_file}.{self.output_format}"
+        self.output_file = f"{output_file_name}.{self.output_format}"
 
-        # Ensure the correct file extension
-        if self.output_format not in {"json", "csv"}:
-            raise ValueError("Invalid format. Choose 'json' or 'csv'.")
+        if self.output_format not in ["json", "csv"]:
+            raise ValueError("❌ Invalid format. Use either 'json' or 'csv'.")
 
-    def export(self, data: Dict[str, Any]) -> None:
+    def store(self, data: Dict[str, Any]) -> None:
+        """Cache data before writing out."""
+        self.output.append(data)
+
+    def dump(self) -> None:
+        """Empty cache to specified file"""
+        self.export(self.output)
+        self.output.clear()
+
+    def export(self, data: Dict[str, Any] | list[Dict[str, Any]]) -> None:
         """Saves extracted data to a file in the specified format."""
         if self.output_format == "json":
             self._save_json(data)
         elif self.output_format == "csv":
             self._save_csv(data)
 
-    def _save_json(self, data: Dict[str, Any]) -> None:
+    def _save_json(self, data: Dict[str, Any] | list[Dict[str, Any]]) -> None:
         """Appends extracted data to a JSON file."""
         try:
             if self.compress:
                 with gzip.open(
                     self.output_file + ".gz", "wt", encoding="utf-8"
                 ) as gz_file:
-                    json.dump(data, gz_file, indent=2, ensure_ascii=False)
+                    json.dump(data, gz_file, ensure_ascii=False, indent=2)
             else:
                 with open(self.output_file, "a", encoding="utf-8") as file:
                     json.dump(data, file, ensure_ascii=False, indent=2)
@@ -193,7 +230,7 @@ class DataHandler:
         except Exception as e:
             log.error(f"❌ Error saving JSON: {e}")
 
-    def _save_csv(self, data: Dict[str, Any]) -> None:
+    def _save_csv(self, data: Dict[str, Any] | list[Dict[str, Any]]) -> None:
         """Appends extracted data to a CSV file."""
         try:
             # Flatten nested lists/dictionaries for CSV format

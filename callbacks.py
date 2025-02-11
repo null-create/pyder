@@ -6,18 +6,13 @@ from typing import Callable, Dict, List, Any
 import nltk
 import httpx
 from bs4 import BeautifulSoup
+from loguru import logger as log
 
 from nltk.tokenize import word_tokenize
 from nltk.tag import pos_tag
 from nltk.chunk import ne_chunk
 
-nltk.download("punkt")
-nltk.download("maxent_ne_chunker")
-nltk.download("words")
-nltk.download("averaged_perceptron_tagger")
-
-
-from data import save_data_to_json, save_data_for_training
+from data import save_author_data_for_training
 
 # file for custom call backs defined in EXTRACTION RULES used by the
 # crawler class to handle various discoveries and scenaries
@@ -38,7 +33,10 @@ async def fetch_html(url: str) -> httpx.Response:
 
 def is_likely_name(text: str) -> bool:
     """Uses regex heuristics to check if a string resembles a human name."""
-    return bool(re.match(r"\b[A-Z][a-z]+ [A-Z][a-z]+\b", text))
+    return bool(
+        re.match(r"\b[A-Z][a-z]+ [A-Z][a-z]+\b", text)  # two names
+        or re.match(r"\b[A-Z][a-z]+ [A-Z][a-z]+ [A-Z][a-z]+\b", text)  # three names
+    )
 
 
 def extract_names(soup: BeautifulSoup, _: str = "") -> Dict[str, List[str]]:
@@ -200,7 +198,7 @@ def search_keywords(soup: BeautifulSoup, keywords: List[str]) -> Dict[str, List[
 
 # used for testing
 async def analyze_webpage(
-    soup: BeautifulSoup, url: str, keywords: List[str]
+    url: str, keywords: List[str]
 ) -> tuple[Dict[str, List[str]], list]:
     """Fetches a webpage and extracts names and keyword matches."""
     try:
@@ -209,7 +207,7 @@ async def analyze_webpage(
 
         keyword_results = search_keywords(soup, keywords)
 
-        print("\nKeyword Matches:")
+        log.info("\nKeyword Matches:")
         for keyword, occurrences in keyword_results.items():
             print(f"\nKeyword: {keyword}")
             if occurrences:
@@ -222,13 +220,10 @@ async def analyze_webpage(
             if re.match(pattern, url):
                 extracted_data.append(extraction_fn(soup, url))
 
-        for data in extracted_data:
-            print(json.dumps(data, indent=2))
-
         return (keyword_results, extracted_data)
 
     except httpx.HTTPError as e:
-        print(f"Error fetching page: {e}")
+        log.error(f"❌ Error fetching page: {e}")
 
 
 DATA_EXTRACTION: Dict[str, CallbackFunction] = {

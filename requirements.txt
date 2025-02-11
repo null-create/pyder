@@ -1,6 +1,7 @@
 httpx 
 parsel 
 w3lib 
+python-dotenv
 tldextract 
 loguru
 flask

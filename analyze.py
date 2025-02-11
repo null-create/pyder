@@ -1,23 +1,12 @@
 import re
-from typing import Dict, List, Tuple
 from collections import Counter
 
-import joblib
 import numpy as np
-import pandas as pd
 from loguru import logger as log
 
 import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize, sent_tokenize
-
-from sklearn.metrics import accuracy_score
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
-
-from keras.api.models import load_model
-
-from data import preprocess_text
 
 nltk.download("punkt")
 nltk.download("averaged_perceptron_tagger")
@@ -118,91 +107,3 @@ def extract_features(text: str) -> Dict[str, float]:
         "adjective_ratio": num_adjectives / num_words if num_words else 0,
         "emphasis_word_count": emphasis_count,
     }
-
-
-# Load dataset: A CSV file containing text samples labeled as "Author" or "Other"
-def load_training_data(file_path: str) -> tuple[pd.DataFrame, pd.Series]:
-    df = pd.read_csv(file_path)
-    df["text"] = df["text"].apply(preprocess_text)
-    df["features"] = df["text"].apply(extract_features)
-    feature_df = pd.DataFrame(df["features"].tolist())
-    return feature_df, df["label"]
-
-
-def load_trained_model(model_path: str, tokenizer_path: str = None):
-    """
-    Loads a trained ML model and optional tokenizer.
-
-    :param model_path: Path to the saved model file (.pkl for ML models, .h5 for deep learning models).
-    :param tokenizer_path: Path to the tokenizer file (only for deep learning models).
-    :return: Tuple (model, tokenizer or None)
-    """
-
-    # Check if the model is a deep learning model (.h5) or a traditional ML model (.pkl)
-    if model_path.endswith(".h5"):
-        model = load_model(model_path)
-        tokenizer = None
-
-        # Load tokenizer if provided
-        if tokenizer_path:
-            with open(tokenizer_path, "rb") as file:
-                tokenizer = joblib.load(file)
-
-        log.info(f"✅ Loaded deep learning model from {model_path}")
-        return model, tokenizer
-
-    elif model_path.endswith(".pkl"):
-        model = joblib.load(model_path)
-        log.info(f"✅ Loaded ML model from {model_path}")
-        return model, None  # No tokenizer for traditional ML models
-
-    else:
-        raise ValueError(
-            "Unsupported model format. Use '.h5' for deep learning or '.pkl' for ML models."
-        )
-
-
-# Train the model
-def train_author_style_model(
-    file_path: str, model_path: str = "author_model.pkl"
-) -> None:
-    X, y = load_training_data(file_path)
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42
-    )
-
-    model = RandomForestClassifier(n_estimators=100, random_state=42)
-    model.fit(X_train, y_train)
-
-    predictions = model.predict(X_test)
-    accuracy = accuracy_score(y_test, predictions)
-    log.info(f"🧠 Model Accuracy: {accuracy:.2f}")
-
-    joblib.dump(model, model_path)
-    log.info(f"✅ Model saved as {model_path}")
-
-
-# Load trained model and test new text
-def predict_author(text: str, model_path: str = "author_model.pkl") -> str:
-    model = joblib.load(model_path)
-    text = preprocess_text(text)
-    features = extract_features(text)
-    input_df = pd.DataFrame([features])
-
-    prediction = model.predict(input_df)
-    return (
-        "Likely Written by the Author"
-        if prediction[0] == "Author"
-        else "Not Likely Written by the Author"
-    )
-
-
-if __name__ == "__main__":
-    # Example usage
-    train_author_style_model("author_data.csv")  # Train model on labeled dataset
-
-    sample_text = """
-    According to my research, cybersecurity threats evolve daily.
-    AI is revolutionizing how we detect and mitigate risks in this field.
-    """
-    print(predict_author(sample_text))

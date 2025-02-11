@@ -15,7 +15,7 @@ async def main():
     # Load trained model for author detection (if applicable)
     model, tokenizer = None, None
     if workflow == "author_detection":
-        from analyze import load_trained_model
+        from model import load_trained_model
 
         model, tokenizer = load_trained_model("model.pkl", "tokenizer.pkl")
 

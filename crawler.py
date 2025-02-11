@@ -1,3 +1,4 @@
+import os
 import re
 import asyncio
 from urllib.parse import urljoin, urlparse
@@ -9,16 +10,18 @@ from parsel import Selector
 from loguru import logger as log
 from bs4 import BeautifulSoup
 from keras.api.preprocessing.sequence import pad_sequences
+from dotenv import load_dotenv
 
-from model import Model
-from analyze import load_trained_model
-from data import DataHandler, get_keywords
+from model import Model, load_trained_model
+from data import DataHandler, get_keywords, get_model_and_tokenizer_filenames
 from callbacks import DATA_EXTRACTION, CallbackFunction
 from urls import UrlFilter, get_seed_urls, generate_url_filters
 
 # Crawler modes
 DISCOVERY = "data_collection"
 DETECTION = "author_detection"
+
+load_dotenv()
 
 
 class Crawler:
@@ -48,7 +51,7 @@ class Crawler:
         callbacks: Dict[str, CallbackFunction] = None,
         keywords: list[str] = None,
         search_depth: int = None,
-        save_logs: bool = False,
+        save_data: bool = False,
     ) -> None:
         self.url_filters = filters  # url filter class
         self.data = data_handler  # data handler class
@@ -58,10 +61,12 @@ class Crawler:
         self.callbacks = callbacks or {}  # callbacks dict
         self.keywords = keywords or []  # list of keywords to search for
         self.search_depth = search_depth or 10  # search depth for each page
-        self.writeout = save_logs  # flag for saving json data
+        self.export = save_data  # flag for saving json data
 
     def predict_author(self, text: str) -> str:
         """predicts if a given text was written by the target author."""
+        # TODO: handle whether or not a tokenizer is even involved. Check for model type
+        # and handle accordingly before predition. use tokenizer only if needed.
         if self.tokenizer and self.workflow == DETECTION:
             sequence = self.tokenizer.texts_to_sequences([text])
             padded_sequence = pad_sequences(sequence, maxlen=100)
@@ -85,11 +90,14 @@ class Crawler:
                     )
 
             if self.workflow == DETECTION and self.model:
+                log.info("[!] running author prediction...")
                 extracted_data["author_prediction"] = self.predict_author(
                     extracted_data.get("main_content", "")
                 )
+                log.info(f"[+] model guess: {extracted_data['author_prediction']}")
 
-        self.data.export(extracted_data)
+        if self.export:
+            self.data.export(extracted_data)
 
     def find_urls(self, responses: List[httpx.Response]) -> List[str]:
         """find valid urls in responses"""
@@ -152,12 +160,13 @@ async def run_crawler(
     tokenizer: Optional[Any] = None,
 ) -> None:
     if workflow == DETECTION:
-        model, tokenizer = load_trained_model("CHANGME", "CHANGEME")
+        model_file, tokenizer_file = get_model_and_tokenizer_filenames()
+        model, tokenizer = load_trained_model(model_file, tokenizer_file)
 
     async with Crawler(
         filters=generate_url_filters(seed_urls),
         data_handler=DataHandler(
-            output_file="scraped-data",
+            output_file_name="scraped-data",
             output_format="csv" if workflow == DISCOVERY else "json",
         ),
         workflow=workflow,
