@@ -268,7 +268,7 @@ def extract_main_content(soup: BeautifulSoup, _: str = "") -> Dict[str, str]:
             " ".join(p.get_text(strip=True) for p in soup.find("article").find_all("p"))
         )
 
-    # If <article> is not found, try Reddit/Medium-style posts
+    # Look for Reddit/Medium-style posts
     if soup.find("div", class_=re.compile(r"post|content|text|article", re.IGNORECASE)):
         content_candidates.append(
             " ".join(
@@ -279,13 +279,10 @@ def extract_main_content(soup: BeautifulSoup, _: str = "") -> Dict[str, str]:
             )
         )
 
-    # If still no content, fall back to <p> tags, filtering out common non-content elements
-    if not content_candidates:
-        paragraphs = [p.get_text(strip=True) for p in soup.find_all("p")]
-        filtered_paragraphs = [
-            p for p in paragraphs if len(p.split()) > 5
-        ]  # Avoid very short text like menu items
-        content_candidates.append(" ".join(filtered_paragraphs))
+    # Get all <p> tags, filtering out common non-content elements
+    paragraphs = [p.get_text(strip=True) for p in soup.find_all("p")]
+    filtered_paragraphs = [p for p in paragraphs if len(p.split()) > 5]
+    content_candidates.append(" ".join(filtered_paragraphs))
 
     # Select the longest candidate as the most likely main content
     main_content = max(content_candidates, key=len, default="No main content found.")
@@ -312,22 +309,23 @@ def search_keywords(soup: BeautifulSoup, keywords: List[str]) -> Dict[str, List[
 
 # used for testing
 async def analyze_webpage(
-    url: str, keywords: List[str]
+    url: str, keywords: List[str] = None
 ) -> tuple[Dict[str, List[str]], list]:
     """Fetches a webpage and extracts names and keyword matches."""
     try:
         response = await fetch_html(url)
         soup = BeautifulSoup(response.text, "html.parser")
 
-        keyword_results = search_keywords(soup, keywords)
+        if keywords:
+            keyword_results = search_keywords(soup, keywords)
 
-        log.info("\nKeyword Matches:")
-        for keyword, occurrences in keyword_results.items():
-            print(f"\nKeyword: {keyword}")
-            if occurrences:
-                print("\n".join(occurrences[:5]))  # Show first 5 matches
-            else:
-                print("No occurrences found.")
+            log.info("\nKeyword Matches:")
+            for keyword, occurrences in keyword_results.items():
+                print(f"\nKeyword: {keyword}")
+                if occurrences:
+                    print("\n".join(occurrences[:5]))  # Show first 5 matches
+                else:
+                    print("No occurrences found.")
 
         extracted_data = []
         for pattern, extraction_fn in DATA_EXTRACTION.items():
