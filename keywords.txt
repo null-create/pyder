@@ -1,2 +1,8 @@
 stuff
 things
+development
+programming
+coding
+security
+vulnerabilities
+source

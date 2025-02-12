@@ -9,8 +9,9 @@ from httpx import Response
 from parsel import Selector
 from loguru import logger as log
 from bs4 import BeautifulSoup
-from keras.api.preprocessing.sequence import pad_sequences
 from dotenv import load_dotenv
+
+from keras.api.preprocessing.sequence import pad_sequences
 
 from model import Model, load_trained_model
 from data import DataHandler, get_keywords, get_model_and_tokenizer_filenames
@@ -31,7 +32,7 @@ class Crawler:
             limits=httpx.Limits(max_connections=5),
             headers={
                 "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36",
-                "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
+                "accept": "text/html,application/json,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
                 "accept-language": "en-US;en;q=0.9",
                 "accept-encoding": "gzip, deflate, br",
             },
@@ -147,8 +148,8 @@ class Crawler:
             log.info(
                 f"[!] depth {depth}: scraped {len(responses)} pages and failed {len(failures)}"
             )
-            url_pool = self.find_urls(responses)
             self.process_responses(responses)
+            url_pool = self.find_urls(responses)
             depth += 1
 
 
