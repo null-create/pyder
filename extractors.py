@@ -9,9 +9,9 @@ from bs4 import BeautifulSoup
 from loguru import logger as log
 from playwright.sync_api import sync_playwright
 
-from nltk.tokenize import word_tokenize
 from nltk.tag import pos_tag
 from nltk.chunk import ne_chunk
+from nltk.tokenize import word_tokenize
 
 from data import save_author_data_for_training, get_keywords
 
@@ -297,7 +297,7 @@ DATA_EXTRACTION: Dict[str, ExtractorCallback] = {
 if __name__ == "__main__":
     import asyncio
 
-    url = "https://scrapfly.io"
+    url = "https://apnews.com/"
     keywords = get_keywords()
 
     asyncio.run(analyze_webpage(url, [kw.strip() for kw in keywords]))

@@ -130,7 +130,7 @@ def decompress_json_gz(file_path: str) -> str:
         return ""
 
 
-def save_data(
+def save_data_npbin(
     X_train: np.ndarray, y_train: np.ndarray, X_val: np.ndarray, y_val: np.ndarray
 ) -> None:
     """Save training data as numpy binary files"""

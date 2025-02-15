@@ -1,19 +1,19 @@
 import os
 import json
 import joblib
-import numpy as np
 import pickle
+import numpy as np
 from typing import Dict, List, Tuple, Type, Union, Any
 
 from loguru import logger as log
 
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.model_selection import train_test_split
+from sklearn.svm import SVC
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.svm import SVC
+from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, classification_report
+from sklearn.feature_extraction.text import TfidfVectorizer
 
 from keras.api.models import load_model
 from keras.api.models import Sequential
@@ -21,7 +21,7 @@ from keras.api.layers import Embedding, LSTM, Dense, Dropout
 from keras.api.preprocessing.sequence import pad_sequences
 from keras_hub.api.tokenizers import Tokenizer
 
-from data import save_data
+from data import save_data_npbin
 
 
 class Model:
@@ -130,7 +130,7 @@ def load_trained_model(model_path: str, tokenizer_path: str = None):
         # Load tokenizer if provided
         if tokenizer_path:
             if not os.path.exists(tokenizer_path):
-                log.error(f"{tokenizer_path} not found")
+                log.error(f"❌ {tokenizer_path} not found")
                 raise FileNotFoundError(f"{tokenizer_path} not found")
 
             with open(tokenizer_path, "rb") as file:
@@ -179,7 +179,7 @@ def train_lstm(texts: list[str], labels: list[str]) -> tuple[Sequential, Any]:
     )
 
     model: Sequential = Sequential(
-        [
+        layers=[
             Embedding(input_dim=5000, output_dim=128, input_length=100),
             LSTM(64, return_sequences=True),
             LSTM(32),
@@ -223,7 +223,7 @@ def main() -> None:
         X_train, X_val, y_train, y_val = train_test_split(
             X, y, test_size=0.2, random_state=42
         )
-        save_data(X_train, y_train, X_val, y_val)
+        save_data_npbin(X_train, y_train, X_val, y_val)
         model.train(X_train, y_train, X_val, y_val)
         model.save_vectorizer()
 
