@@ -6,3 +6,4 @@ old-files
 ml_practice.py
 scraped-data.*
 __pycache__
+*.txt
