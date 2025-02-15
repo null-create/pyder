@@ -150,9 +150,6 @@ class UrlFilter:
             if not self.is_valid_scheme(url):
                 log.debug(f"drop ignored scheme {url}")
                 continue
-            if self.venture and not self.is_related(url):
-                log.debug(f"drop possibly unrelated external site: {url}")
-                continue
             if not self.venture and not self.is_valid_domain(url):
                 log.debug(f"drop offsite url {url}")
                 continue

@@ -14,15 +14,15 @@ from dotenv import load_dotenv
 from keras.api.preprocessing.sequence import pad_sequences
 
 from model import Model, load_trained_model
-from data import DataHandler, get_keywords, get_model_and_tokenizer_filenames
-from callbacks import DATA_EXTRACTION, CallbackFunction
+from extractors import DATA_EXTRACTION, ExtractorCallback
 from urls import UrlFilter, get_seed_urls, generate_url_filters
+from data import DataHandler, get_keywords, get_model_and_tokenizer_filenames
+
+load_dotenv()
 
 # Crawler modes
 DISCOVERY = "data_collection"
 DETECTION = "author_detection"
-
-load_dotenv()
 
 
 class Crawler:
@@ -49,7 +49,7 @@ class Crawler:
         workflow: str,
         model: Model = None,
         tokenizer: Optional[Any] = None,
-        callbacks: Dict[str, CallbackFunction] = None,
+        callbacks: Dict[str, ExtractorCallback] = None,
         keywords: list[str] = None,
         search_depth: int = None,
         save_data: bool = False,
@@ -61,7 +61,7 @@ class Crawler:
         self.tokenizer = tokenizer  # ml tokenizer
         self.callbacks = callbacks or {}  # callbacks dict
         self.keywords = keywords or []  # list of keywords to search for
-        self.search_depth = search_depth or 10  # search depth for each page
+        self.search_depth = search_depth or 10  # url pool iterations
         self.export = save_data  # flag for saving json data
 
     def predict_author(self, text: str) -> str:

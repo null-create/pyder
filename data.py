@@ -189,15 +189,16 @@ class DataHandler:
         compress: bool = False,
         output_format: str = "csv",
         output_file_name: str = "output",
-    ):
+    ) -> None:
         """Manages caching and storing extracted data to JSON or CSV format."""
-        self.compress = compress
-        self.output: list[Dict[str, Any]]  # cached data to be written out
-        self.output_format = output_format.lower()
-        self.output_file = f"{output_file_name}.{self.output_format}"
+        self.compress = compress  # only works with json output
+        self.output = []  # cached data to be written out
 
         if self.output_format not in ["json", "csv"]:
             raise ValueError("❌ Invalid format. Use either 'json' or 'csv'.")
+
+        self.output_format = output_format.lower()
+        self.output_file = f"{output_file_name}.{self.output_format}"
 
     def store(self, data: Dict[str, Any]) -> None:
         """Cache data before writing out."""

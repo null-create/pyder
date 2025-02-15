@@ -1,42 +1,45 @@
 import asyncio
 
+from dotenv import load_dotenv
+
 from urls import generate_url_filters
-from data import DataHandler
-from crawler import Crawler
-from callbacks import DATA_EXTRACTION
+from data import DataHandler, get_keywords
+from crawler import Crawler, DETECTION, DISCOVERY, get_seed_urls
+from extractors import DATA_EXTRACTION
+
+load_dotenv()
 
 
 async def main():
+    # Get main workflow from user
     workflow = (
         input("Choose workflow (data_collection/author_detection): ").strip().lower()
     )
-    output_format = input("Choose output format (json/csv): ").strip().lower()
 
     # Load trained model for author detection (if applicable)
     model, tokenizer = None, None
-    if workflow == "author_detection":
-        from model import load_trained_model
+    if workflow == DETECTION:
+        if workflow == "author_detection":
+            from model import load_trained_model
 
-        model, tokenizer = load_trained_model("model.pkl", "tokenizer.pkl")
+            model, tokenizer = load_trained_model("model.pkl", "tokenizer.pkl")
 
-    urls = [
-        "https://example.com/blog-post",
-        "https://medium.com/@author/article-1",
-        "https://www.reddit.com/r/topic/comments/abcdef/post_title",
-    ]
+    seed_urls = get_seed_urls()
 
     # Initialize DataHandler & Crawler
-    crawler = Crawler(
-        filters=generate_url_filters(urls),
-        data_handler=DataHandler(output_format=output_format),
+    async with Crawler(
+        filters=generate_url_filters(seed_urls),
+        data_handler=DataHandler(
+            output_file_name="scraped-data",
+            output_format="csv" if workflow == DISCOVERY else "json",
+        ),
         workflow=workflow,
-        callbacks=DATA_EXTRACTION,
         model=model,
         tokenizer=tokenizer,
-    )
-
-    await crawler.run(urls)
-    await crawler.close()
+        callbacks=DATA_EXTRACTION,
+        keywords=get_keywords(),
+    ) as crawler:
+        await crawler.run(seed_urls)
 
 
 if __name__ == "__main__":

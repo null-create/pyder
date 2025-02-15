@@ -13,14 +13,14 @@ from nltk.tokenize import word_tokenize
 from nltk.tag import pos_tag
 from nltk.chunk import ne_chunk
 
-from data import save_author_data_for_training
+from data import save_author_data_for_training, get_keywords
 
 # file for custom call backs defined in EXTRACTION RULES used by the
 # crawler class to handle various discoveries and scenaries
 
 
 # Define type alias for extraction function signatures
-CallbackFunction = Callable[[BeautifulSoup, str], Dict[str, Any]]
+ExtractorCallback = Callable[[BeautifulSoup, str], Dict[str, Any]]
 
 
 # used for testing
@@ -69,77 +69,7 @@ def extract_names(soup: BeautifulSoup, _: str = "") -> Dict[str, List[str]]:
     return {"names": unique_names if unique_names else ["No names found."]}
 
 
-def extract_author_post(soup: BeautifulSoup, base_url: str) -> list[str]:
-    """
-    Extracts posts from a BeautifulSoup object for various social media sites.
-
-    :param soup: BeautifulSoup object containing parsed HTML.
-    :param base_url: The base URL of the website (to resolve relative links).
-    :return: A list of extracted posts.
-    """
-    posts = []
-
-    # Define extraction rules per social media site
-    extraction_rules = {
-        "facebook.com": {
-            "author": ["author", "username"],
-            "post": ["userContent", "post-text"],
-        },
-        "twitter.com": {
-            "author": ["css-1dbjc4n r-18u37iz r-1wbh5a2"],
-            "post": ["css-901oao", "tweet-text"],
-        },
-        "x.com": {
-            "author": ["css-1dbjc4n r-18u37iz r-1wbh5a2"],
-            "post": ["css-901oao", "tweet-text"],
-        },
-        "linkedin.com": {
-            "author": ["feed-shared-actor"],
-            "post": ["feed-shared-update-v2__description-wrapper"],
-        },
-        "instagram.com": {
-            "author": ["_aacl", "_aaco", "_aacu"],
-            "post": ["_a9zs", "_a9zr"],
-        },
-        "youtube.com": {
-            "author": ["ytd-channel-name"],
-            "post": ["yt-formatted-string", "comment-text"],
-        },
-        "tiktok.com": {
-            "author": ["css-901oao"],
-            "post": ["tiktok-1xg78ey-DivCommentText"],
-        },
-    }
-
-    # Identify which site's rules to use
-    domain = base_url.split("//")[-1].split("/")[0]  # Extract domain from URL
-    site_rules = next(
-        (rules for site, rules in extraction_rules.items() if site in domain), None
-    )
-
-    if not site_rules:
-        return []  # If site is unsupported, return empty list
-
-    # Extract author elements
-    author_elements = soup.find_all(
-        class_=lambda x: x and any(cls in x.lower() for cls in site_rules["author"])
-    )
-
-    for author_element in author_elements:
-        post_element = author_element.find_next(
-            class_=lambda x: x and any(cls in x.lower() for cls in site_rules["post"])
-        )
-        if post_element:
-            post_text = post_element.get_text(strip=True)
-            post_link = post_element.find("a", href=True)
-            full_url = urljoin(base_url, post_link["href"]) if post_link else None
-
-            posts.append({"text": post_text, "url": full_url})
-
-    return posts
-
-
-def extract_posts_playwright(url: str, max_posts: int = 5) -> list:
+def extract_posts(url: str, max_posts: int = 5) -> list:
     """
     Extracts posts from a given social media URL using Playwright in headless mode.
 
@@ -190,7 +120,7 @@ def extract_links(soup: BeautifulSoup, base_url: str) -> Dict[str, List[str]]:
 
 def extract_named_mentions(soup: BeautifulSoup, _: str) -> Dict[str, List[str]]:
     """Finds mentions of the author's name in text."""
-    author_name = ""
+    author_name = ""  # TODO
     text_content = soup.get_text(" ")
     mentions = re.findall(rf"\b{re.escape(author_name)}\b", text_content, re.IGNORECASE)
     return {"author_mentions": mentions if mentions else ["No mentions found."]}
@@ -199,7 +129,17 @@ def extract_named_mentions(soup: BeautifulSoup, _: str) -> Dict[str, List[str]]:
 def extract_file_downloads(soup: BeautifulSoup, base_url: str) -> Dict[str, List[str]]:
     """Filters links for common downloadable file types."""
     links = extract_links(soup, base_url)["links"]
-    file_extensions = (".pdf", ".zip", ".exe", ".docx", ".xlsx", ".mp4")
+    file_extensions = (
+        ".pdf",
+        ".zip",
+        ".exe",
+        ".docx",
+        ".xlsx",
+        ".mp4",
+        ".tar",
+        ".doc",
+        ".txt",
+    )
     file_downloads = [
         link
         for link in links
@@ -332,20 +272,24 @@ async def analyze_webpage(
             if re.match(pattern, url):
                 extracted_data.append(extraction_fn(soup, url))
 
+        ans = input("View results? (y/n): ")
+        if ans.lower() == "y":
+            for i, item in enumerate(extracted_data):
+                print(f"{i+1}: {json.dumps(item, indent=2)}\n")
+
         return (keyword_results, extracted_data)
 
     except httpx.HTTPError as e:
         log.error(f"❌ Error fetching page: {e}")
 
 
-DATA_EXTRACTION: Dict[str, CallbackFunction] = {
+DATA_EXTRACTION: Dict[str, ExtractorCallback] = {
     r".*": extract_names,  # Extract names from text
     r".*": extract_metadata,  # Extract metadata (title, description, keywords)
     r".*": extract_main_content,  # Extract main site content
     r"https?://.*": extract_internal_links,  # Extract internal links
     r"https?://.*": extract_external_links,  # Extract external links
     r"https?://.*": extract_social_links,  # Extract social media links
-    r"https?://.*": extract_author_post,  # Extract any posts by an author
     r".*\.(pdf|zip|exe|docx|xlsx|mp4)$": extract_file_downloads,  # Extract downloadable files
 }
 
@@ -354,6 +298,6 @@ if __name__ == "__main__":
     import asyncio
 
     url = "https://scrapfly.io"
-    keywords = ["developers", "code", "stuff"]
+    keywords = get_keywords()
 
     asyncio.run(analyze_webpage(url, [kw.strip() for kw in keywords]))
