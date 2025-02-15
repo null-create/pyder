@@ -65,10 +65,8 @@ class Crawler:
         self.export = save_data  # flag for saving json data
 
     def predict_author(self, text: str) -> str:
-        """predicts if a given text was written by the target author."""
-        # TODO: handle whether or not a tokenizer is even involved. Check for model type
-        # and handle accordingly before predition. use tokenizer only if needed.
-        if self.tokenizer and self.workflow == DETECTION:
+        """sends text to the model to predict whether it was written by a specific author"""
+        if self.tokenizer:
             sequence = self.tokenizer.texts_to_sequences([text])
             padded_sequence = pad_sequences(sequence, maxlen=100)
             prediction = self.model.predict(padded_sequence)[0]
