@@ -21,7 +21,7 @@ from data import save_author_data_for_training, get_keywords
 
 
 # Define type alias for extraction function signatures
-ExtractorCallback = Callable[[BeautifulSoup, str], Dict[str, Any]]
+ExtractorCallback = Callable[[BeautifulSoup, URL], Dict[str, Any]]
 
 
 # used for testing
