@@ -9,108 +9,28 @@ from loguru import logger as log
 
 
 class UrlFilter:
-    IGNORED_EXTENSIONS = [
-        # archives
-        "7z",
-        "7zip",
-        "bz2",
-        "rar",
-        "tar",
-        "tar.gz",
-        "xz",
-        "zip",
-        # images
-        "mng",
-        "pct",
-        "bmp",
-        "gif",
-        "jpg",
-        "jpeg",
-        "png",
-        "pst",
-        "psp",
-        "tif",
-        "tiff",
-        "ai",
-        "drw",
-        "dxf",
-        "eps",
-        "ps",
-        "svg",
-        "cdr",
-        "ico",
-        # audio
-        "mp3",
-        "wma",
-        "ogg",
-        "wav",
-        "ra",
-        "aac",
-        "mid",
-        "au",
-        "aiff",
-        # video
-        "3gp",
-        "asf",
-        "asx",
-        "avi",
-        "mov",
-        "mp4",
-        "mpg",
-        "qt",
-        "rm",
-        "swf",
-        "wmv",
-        "m4a",
-        "m4v",
-        "flv",
-        "webm",
-        # office suites
-        "xls",
-        "xlsx",
-        "ppt",
-        "pptx",
-        "pps",
-        "doc",
-        "docx",
-        "odt",
-        "ods",
-        "odg",
-        "odp",
-        # other
-        "css",
-        "pdf",
-        "exe",
-        "bin",
-        "rss",
-        "dmg",
-        "iso",
-        "apk",
-    ]
-
     def __init__(
         self,
         hostname: str,
         domain: str = None,
         subdomain: str = None,
         venture: bool = False,
-        follow: List[Pattern] = None,
+        follow_paths: List[Pattern] = None,
     ) -> None:
         self.hostname = hostname  # site host
         self.domain = domain or ""  # restrict filtering to specific TLD
-        self.subdomain = subdomain or ""  # restrict filtering to sepcific subdomain
+        self.subdomain = subdomain or ""  # restrict filtering to specific subdomain
         self.venture = venture  # whether to allow off-site urls
-        self.follow = follow or []
+        self.follow_paths = follow_paths or []  # list of regex path patterns
         log.info(
-            f"filter created for domain {self.subdomain}.{self.domain} with follow rules {follow}"
+            f"filter created for domain {self.subdomain}.{self.domain} with follow rules {follow_paths}"
         )
-        self.seen = set()
+        self.seen = set()  # visited URLs
 
     def is_valid_ext(self, url: str) -> bool:
         """ignore non-crawlable documents"""
         return (
-            posixpath.splitext(urlparse(url).path)[1].lower()
-            not in self.IGNORED_EXTENSIONS
+            posixpath.splitext(urlparse(url).path)[1].lower() not in IGNORED_EXTENSIONS
         )
 
     def is_valid_scheme(self, url: str) -> bool:
@@ -131,10 +51,10 @@ class UrlFilter:
 
     def is_valid_path(self, url: str) -> bool:
         """ignore urls of undesired paths"""
-        if not self.follow:
+        if not self.follow_paths:
             return True
         path = urlparse(url).path
-        for pattern in self.follow:
+        for pattern in self.follow_paths:
             if pattern.match(path):
                 return True
         return False
@@ -206,3 +126,83 @@ def get_seed_urls() -> list[str]:
         urls = f.read().splitlines()
 
     return urls
+
+
+IGNORED_EXTENSIONS = [
+    # archives
+    "7z",
+    "7zip",
+    "bz2",
+    "rar",
+    "tar",
+    "tar.gz",
+    "xz",
+    "zip",
+    # images
+    "mng",
+    "pct",
+    "bmp",
+    "gif",
+    "jpg",
+    "jpeg",
+    "png",
+    "pst",
+    "psp",
+    "tif",
+    "tiff",
+    "ai",
+    "drw",
+    "dxf",
+    "eps",
+    "ps",
+    "svg",
+    "cdr",
+    "ico",
+    # audio
+    "mp3",
+    "wma",
+    "ogg",
+    "wav",
+    "ra",
+    "aac",
+    "mid",
+    "au",
+    "aiff",
+    # video
+    "3gp",
+    "asf",
+    "asx",
+    "avi",
+    "mov",
+    "mp4",
+    "mpg",
+    "qt",
+    "rm",
+    "swf",
+    "wmv",
+    "m4a",
+    "m4v",
+    "flv",
+    "webm",
+    # office suites
+    "xls",
+    "xlsx",
+    "ppt",
+    "pptx",
+    "pps",
+    "doc",
+    "docx",
+    "odt",
+    "ods",
+    "odg",
+    "odp",
+    # other
+    "css",
+    "pdf",
+    "exe",
+    "bin",
+    "rss",
+    "dmg",
+    "iso",
+    "apk",
+]

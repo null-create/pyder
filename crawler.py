@@ -34,7 +34,6 @@ class Crawler:
                 "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36",
                 "accept": "text/html,application/json,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
                 "accept-language": "en-US;en;q=0.9",
-                "accept-encoding": "gzip, deflate, br",
             },
         ).__aenter__()
         return self
@@ -49,10 +48,10 @@ class Crawler:
         workflow: str,
         model: Model = None,
         tokenizer: Optional[Any] = None,
-        callbacks: Dict[str, ExtractorCallback] = None,
+        callbacks: list[ExtractorCallback] = None,
         keywords: list[str] = None,
         search_depth: int = None,
-        save_data: bool = False,
+        export_data: bool = False,
     ) -> None:
         self.url_filters = filters  # url filter class
         self.data = data_handler  # data handler class
@@ -62,7 +61,7 @@ class Crawler:
         self.callbacks = callbacks or {}  # callbacks dict
         self.keywords = keywords or []  # list of keywords to search for
         self.search_depth = search_depth or 10  # url pool iterations
-        self.export = save_data  # flag for saving json data
+        self.export = export_data  # flag for saving json data
 
     def predict_author(self, text: str) -> str:
         """sends text to the model to predict whether it was written by a specific author"""
@@ -80,13 +79,13 @@ class Crawler:
         extracted_data = {"url": responses[0].url}
 
         for response in responses:
-            for pattern, extractor_fn in self.callbacks.items():
-                if re.match(pattern, response.url.netloc.decode("utf-8")):
-                    extracted_data.update(
-                        extractor_fn(
-                            BeautifulSoup(response.text, "html.parser"), response.url
-                        )
+            for extractor_fn in self.callbacks:
+                extracted_data.update(
+                    extractor_fn(
+                        BeautifulSoup(response.text, "html.parser"),
+                        response.url,
                     )
+                )
 
             if self.workflow == DETECTION and self.model:
                 log.info("[!] running author prediction...")

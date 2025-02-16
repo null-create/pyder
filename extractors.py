@@ -5,6 +5,7 @@ from typing import Callable, Dict, List, Any
 
 import nltk
 import httpx
+from httpx import URL
 from bs4 import BeautifulSoup
 from loguru import logger as log
 from playwright.sync_api import sync_playwright
@@ -24,10 +25,17 @@ ExtractorCallback = Callable[[BeautifulSoup, str], Dict[str, Any]]
 
 
 # used for testing
-async def fetch_html(url: str) -> httpx.Response:
+async def fetch_html(url: URL) -> httpx.Response:
     """Fetches the HTML content of the given URL using httpx."""
     async with httpx.AsyncClient() as client:
-        response = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
+        response = await client.get(
+            url,
+            headers={
+                "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36",
+                "accept": "text/html,application/json,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
+                "accept-language": "en-US;en;q=0.9",
+            },
+        )
         response.raise_for_status()
         return response
 
@@ -112,13 +120,13 @@ def extract_posts(url: str, max_posts: int = 5) -> list:
     return posts
 
 
-def extract_links(soup: BeautifulSoup, base_url: str) -> Dict[str, List[str]]:
+def extract_links(soup: BeautifulSoup, base_url: URL) -> Dict[str, List[str]]:
     """Extracts all links from the webpage."""
-    links = [urljoin(base_url, a["href"]) for a in soup.find_all("a", href=True)]
+    links = [urljoin(str(base_url), a["href"]) for a in soup.find_all("a", href=True)]
     return {"links": links}
 
 
-def extract_named_mentions(soup: BeautifulSoup, _: str) -> Dict[str, List[str]]:
+def extract_named_mentions(soup: BeautifulSoup, _: URL) -> Dict[str, List[str]]:
     """Finds mentions of the author's name in text."""
     author_name = ""  # TODO
     text_content = soup.get_text(" ")
@@ -126,7 +134,7 @@ def extract_named_mentions(soup: BeautifulSoup, _: str) -> Dict[str, List[str]]:
     return {"author_mentions": mentions if mentions else ["No mentions found."]}
 
 
-def extract_file_downloads(soup: BeautifulSoup, base_url: str) -> Dict[str, List[str]]:
+def extract_file_downloads(soup: BeautifulSoup, base_url: URL) -> Dict[str, List[str]]:
     """Filters links for common downloadable file types."""
     links = extract_links(soup, base_url)["links"]
     file_extensions = (
@@ -148,23 +156,23 @@ def extract_file_downloads(soup: BeautifulSoup, base_url: str) -> Dict[str, List
     return {"file_downloads": file_downloads}
 
 
-def extract_internal_links(soup: BeautifulSoup, base_url: str) -> Dict[str, List[str]]:
+def extract_internal_links(soup: BeautifulSoup, base_url: URL) -> Dict[str, List[str]]:
     """Extracts internal links that belong to the same domain."""
-    parsed_base = urlparse(base_url).netloc
+    parsed_base = urlparse(str(base_url)).netloc
     links = extract_links(soup, base_url)["links"]
     internal_links = [link for link in links if urlparse(link).netloc == parsed_base]
     return {"internal_links": internal_links}
 
 
-def extract_external_links(soup: BeautifulSoup, base_url: str) -> Dict[str, List[str]]:
+def extract_external_links(soup: BeautifulSoup, base_url: URL) -> Dict[str, List[str]]:
     """Extracts external links that belong to different domains."""
-    parsed_base = urlparse(base_url).netloc
+    parsed_base = urlparse(str(base_url)).netloc
     links = extract_links(soup, base_url)["links"]
     external_links = [link for link in links if urlparse(link).netloc != parsed_base]
     return {"external_links": external_links}
 
 
-def extract_metadata(soup: BeautifulSoup, _: str = "") -> Dict[str, str]:
+def extract_metadata(soup: BeautifulSoup, _: URL) -> Dict[str, str]:
     """Extracts metadata such as title, description, and keywords."""
     title = soup.title.string.strip() if soup.title else "No Title"
     description = soup.find("meta", attrs={"name": "description"})
@@ -179,7 +187,7 @@ def extract_metadata(soup: BeautifulSoup, _: str = "") -> Dict[str, str]:
     }
 
 
-def extract_social_links(soup: BeautifulSoup, base_url: str) -> Dict[str, List[str]]:
+def extract_social_links(soup: BeautifulSoup, base_url: URL) -> Dict[str, List[str]]:
     """Extracts social media links from the webpage."""
     social_domains = (
         "facebook.com",
@@ -196,7 +204,7 @@ def extract_social_links(soup: BeautifulSoup, base_url: str) -> Dict[str, List[s
     return {"social_links": social_links}
 
 
-def extract_main_content(soup: BeautifulSoup, _: str = "") -> Dict[str, str]:
+def extract_main_content(soup: BeautifulSoup, _: URL) -> Dict[str, str]:
     """Extracts the main content of an article, blog post, or social media post."""
 
     # Try extracting from standard article-like structures
@@ -221,13 +229,12 @@ def extract_main_content(soup: BeautifulSoup, _: str = "") -> Dict[str, str]:
 
     # Get all <p> tags, filtering out common non-content elements
     paragraphs = [p.get_text(strip=True) for p in soup.find_all("p")]
-    filtered_paragraphs = [p for p in paragraphs if len(p.split()) > 5]
-    content_candidates.append(" ".join(filtered_paragraphs))
+    content_candidates += [p for p in paragraphs if len(p.split()) > 5]
 
     # Select the longest candidate as the most likely main content
     main_content = max(content_candidates, key=len, default="No main content found.")
 
-    return {"main_content": main_content}
+    return {"main_content": main_content, "all_content": content_candidates}
 
 
 def search_keywords(soup: BeautifulSoup, keywords: List[str]) -> Dict[str, List[str]]:
@@ -235,12 +242,15 @@ def search_keywords(soup: BeautifulSoup, keywords: List[str]) -> Dict[str, List[
     text_content = soup.get_text(" ")  # Get all text with spaces
     found_keywords: Dict[str, List[str]] = {}
 
+    window_size = 30
     for keyword in keywords:
         pattern = re.compile(rf"\b{re.escape(keyword)}\b", re.IGNORECASE)
         matches = pattern.finditer(text_content)
 
         found_keywords[keyword] = [
-            f"...{text_content[max(0, match.start()-30):min(len(text_content), match.end()+30)]}..."
+            f"...{text_content[max(0, match.start()-window_size):min(len(text_content), match.end()+window_size)]}...".replace(
+                "\n", ""
+            )
             for match in matches
         ]
 
@@ -249,7 +259,7 @@ def search_keywords(soup: BeautifulSoup, keywords: List[str]) -> Dict[str, List[
 
 # used for testing
 async def analyze_webpage(
-    url: str, keywords: List[str] = None
+    url: URL, keywords: List[str] = None, view_results: bool = False
 ) -> tuple[Dict[str, List[str]], list]:
     """Fetches a webpage and extracts names and keyword matches."""
     try:
@@ -268,14 +278,14 @@ async def analyze_webpage(
                     print("No occurrences found.")
 
         extracted_data = []
-        for pattern, extraction_fn in DATA_EXTRACTION.items():
-            if re.match(pattern, url):
-                extracted_data.append(extraction_fn(soup, url))
+        for extraction_fn in DATA_EXTRACTION:
+            extracted_data.append(extraction_fn(soup, url))
 
-        ans = input("View results? (y/n): ")
-        if ans.lower() == "y":
-            for i, item in enumerate(extracted_data):
-                print(f"{i+1}: {json.dumps(item, indent=2)}\n")
+        if view_results:
+            ans = input("View results? (y/n): ")
+            if ans.lower() == "y":
+                for i, item in enumerate(extracted_data):
+                    print(f"{i+1}: {json.dumps(item, indent=2)}\n")
 
         return (keyword_results, extracted_data)
 
@@ -283,15 +293,14 @@ async def analyze_webpage(
         log.error(f"❌ Error fetching page: {e}")
 
 
-DATA_EXTRACTION: Dict[str, ExtractorCallback] = {
-    r".*": extract_names,  # Extract names from text
-    r".*": extract_metadata,  # Extract metadata (title, description, keywords)
-    r".*": extract_main_content,  # Extract main site content
-    r"https?://.*": extract_internal_links,  # Extract internal links
-    r"https?://.*": extract_external_links,  # Extract external links
-    r"https?://.*": extract_social_links,  # Extract social media links
-    r".*\.(pdf|zip|exe|docx|xlsx|mp4)$": extract_file_downloads,  # Extract downloadable files
-}
+DATA_EXTRACTION: list[ExtractorCallback] = [
+    extract_metadata,  # Extract metadata (title, description, keywords)
+    extract_main_content,  # Extract main site content
+    extract_internal_links,  # Extract internal links
+    extract_external_links,  # Extract external links
+    extract_social_links,  # Extract social media links
+    extract_file_downloads,  # Extract downloadable files
+]
 
 # Example usage
 if __name__ == "__main__":
@@ -300,4 +309,4 @@ if __name__ == "__main__":
     url = "https://apnews.com/"
     keywords = get_keywords()
 
-    asyncio.run(analyze_webpage(url, [kw.strip() for kw in keywords]))
+    asyncio.run(analyze_webpage(URL(url), [kw.strip() for kw in keywords]))

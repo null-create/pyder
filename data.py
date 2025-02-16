@@ -194,7 +194,7 @@ class DataHandler:
         self.compress = compress  # only works with json output
         self.output = []  # cached data to be written out
 
-        if self.output_format not in ["json", "csv"]:
+        if output_format not in ["json", "csv"]:
             raise ValueError("❌ Invalid format. Use either 'json' or 'csv'.")
 
         self.output_format = output_format.lower()
