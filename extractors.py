@@ -3,16 +3,20 @@ import json
 from urllib.parse import urljoin, urlparse
 from typing import Callable, Dict, List, Any
 
-import nltk
 import httpx
 from httpx import URL
 from bs4 import BeautifulSoup
 from loguru import logger as log
 from playwright.sync_api import sync_playwright
 
+import nltk
 from nltk.tag import pos_tag
 from nltk.chunk import ne_chunk
 from nltk.tokenize import word_tokenize
+
+nltk.download("punkt_tab")
+nltk.download("maxent_ne_chunker_tab")
+nltk.download("averaged_perceptron_tagger_eng")
 
 from data import save_author_data_for_training, get_keywords
 
@@ -48,7 +52,7 @@ def is_likely_name(text: str) -> bool:
     )
 
 
-def extract_names(soup: BeautifulSoup, _: str = "") -> Dict[str, List[str]]:
+def extract_names(soup: BeautifulSoup, _: URL) -> Dict[str, List[str]]:
     """Extracts potential names of people from the webpage content using NER and regex."""
     text_content = " ".join(
         tag.get_text(strip=True) for tag in soup.find_all(["h1", "h2", "h3", "p"])
@@ -66,56 +70,50 @@ def extract_names(soup: BeautifulSoup, _: str = "") -> Dict[str, List[str]]:
             name = " ".join(c[0] for c in chunk)
             detected_names.append(name)
 
-    # Apply regex-based heuristics to detect additional names
-    regex_names = re.findall(r"\b[A-Z][a-z]+\s[A-Z][a-z]+\b", text_content)
+    # Remove duplicates
+    unique_names = set()
+    unique_names = [
+        name
+        for name in detected_names
+        if not (name in unique_names or unique_names.add(name))
+    ]
 
-    # Combine results and remove duplicates
-    unique_names = list(
-        set(detected_names + [name for name in regex_names if is_likely_name(name)])
-    )
-
-    return {"names": unique_names if unique_names else ["No names found."]}
+    return {"names": unique_names if unique_names else ["No names found"]}
 
 
-def extract_posts(url: str, max_posts: int = 5) -> list:
-    """
-    Extracts posts from a given social media URL using Playwright in headless mode.
+def extract_posts(soup: BeautifulSoup, _: URL, author: str) -> list[Dict[str, str]]:
+    """Extracts forum posts by the target author from a given thread URL."""
 
-    :param url: The URL of the page to scrape.
-    :param max_posts: Maximum number of posts to extract.
-    :return: A list of extracted posts.
-    """
+    # Forum-specific extraction logic
     posts = []
+    for post in soup.find_all(
+        "div", class_=re.compile(r"post|comment|message", re.IGNORECASE)
+    ):
+        author_tag = post.find(
+            "a", class_=re.compile(r"user|username|author", re.IGNORECASE)
+        )
+        content_tag = post.find(
+            "div", class_=re.compile(r"content|text|body", re.IGNORECASE)
+        )
+        timestamp_tag = post.find(
+            "span", class_=re.compile(r"time|date", re.IGNORECASE)
+        )
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)  # Headless mode
-        page = browser.new_page()
-        page.goto(url, timeout=60000)  # Load page with a timeout
-
-        # Simulate scrolling to load dynamic content
-        for _ in range(3):  # Scroll multiple times
-            page.evaluate("window.scrollBy(0, document.body.scrollHeight)")
-            page.wait_for_timeout(2000)
-
-        # Define social media-specific selectors
-        selectors = {
-            "twitter.com": "article div[lang]",  # Tweet text
-            "facebook.com": "div[data-ad-preview]",  # Facebook post
-            "linkedin.com": "div.feed-shared-update-v2__description-wrapper",
-            "instagram.com": "div._a9zs",
-            "youtube.com": "yt-formatted-string#content-text",
-            "tiktok.com": "div.tiktok-1xg78ey-DivCommentText",
-        }
-
-        domain = url.split("//")[-1].split("/")[0]  # Extract domain
-        selector = next((selectors[site] for site in selectors if site in domain), None)
-
-        if selector:
-            elements = page.query_selector_all(selector)
-            for element in elements[:max_posts]:
-                posts.append(element.inner_text().strip())
-
-        browser.close()
+        if author_tag and content_tag:
+            post_author = author_tag.get_text(strip=True).lower()
+            if post_author == author:
+                post_content = content_tag.get_text(strip=True)
+                timestamp = (
+                    timestamp_tag.get_text(strip=True) if timestamp_tag else "Unknown"
+                )
+                posts.append(
+                    {
+                        "author": post_author,
+                        "post_content": post_content,
+                        "timestamp": timestamp,
+                        "thread_url": url,
+                    }
+                )
 
     return posts
 
@@ -295,6 +293,7 @@ async def analyze_webpage(
 
 DATA_EXTRACTION: list[ExtractorCallback] = [
     extract_metadata,  # Extract metadata (title, description, keywords)
+    extract_names,  # Extract any possible names
     extract_main_content,  # Extract main site content
     extract_internal_links,  # Extract internal links
     extract_external_links,  # Extract external links

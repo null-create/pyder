@@ -75,7 +75,7 @@ def save_author_data_for_training(
     - `output_file`: File to save processed data.
     """
     if not output_file:
-        output_file = "author_data.csv"
+        output_file = f"{author_name}_data.csv"
 
     with open(output_file, "w", newline="", encoding="utf-8") as file:
         writer = csv.writer(file)
@@ -234,17 +234,29 @@ class DataHandler:
     def _save_csv(self, data: Dict[str, Any] | list[Dict[str, Any]]) -> None:
         """Appends extracted data to a CSV file."""
         try:
-            # Flatten nested lists/dictionaries for CSV format
-            flat_data = {
-                k: (",".join(v) if isinstance(v, list) else v) for k, v in data.items()
-            }
             file_exists = os.path.isfile(self.output_file)
 
             with open(self.output_file, "a", newline="", encoding="utf-8") as file:
-                writer = csv.DictWriter(file, fieldnames=flat_data.keys())
+                writer = csv.writer(file)
+                # add initial header if we're creating the file for the first time
+                if not file_exists:
+                    writer.writerow(
+                        [
+                            "author",
+                            "post_content",
+                            "timestamp",
+                            "thread_url",
+                        ]
+                    )
 
-                if not file_exists:  # Write header only if file is new
-                    writer.writeheader()
-                writer.writerow(flat_data)
+                for post in data:
+                    writer.writerow(
+                        [
+                            post["author"],
+                            post["post_content"],
+                            post["timestamp"],
+                            post["thread_url"],
+                        ]
+                    )
         except Exception as e:
             log.error(f"❌ Error saving CSV: {e}")
