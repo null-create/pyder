@@ -167,26 +167,17 @@ class ModelTrainer:
     recognize an author's writing style.
     """
 
-    def __init__(
-        self, file_path: str, target_author: str, model_path: str = "random_forest.pkl"
-    ):
+    def __init__(self) -> None:
         """
         Initializes the training pipeline.
-
-        :param file_path: Path to the CSV dataset.
-        :param target_author: The username of the author to classify.
-        :param model_path: Path to save the trained model.
         """
-        self.file_path: str = file_path
-        self.target_author: str = target_author.lower()
-        self.model_path: str = model_path
         self.vectorizer: TfidfVectorizer = TfidfVectorizer(
             max_features=5000, stop_words="english"
         )
         self.trained_model: Any = None
 
     def prepare_data(
-        self, file_path: str
+        self, training_data: str
     ) -> Tuple[np.ndarray, np.ndarray, Dict[str, Any]]:
         """
         Loads, analyzes, and preprocesses the dataset.
@@ -194,7 +185,7 @@ class ModelTrainer:
         :param file_path: Path to the CSV dataset.
         :return: Tuple (feature matrix, labels, dataset information).
         """
-        df: pd.DataFrame = pd.read_csv(file_path)
+        df: pd.DataFrame = pd.read_csv(training_data)
         if not {"author", "post_content"}.issubset(df.columns):
             raise ValueError("❌ CSV must contain 'author' and 'post_content' columns.")
 
@@ -205,24 +196,6 @@ class ModelTrainer:
         # Analyze dataset characteristics
         dataset_info: Dict[str, Any] = self.analyze_dataset(y, X)
         return X, y, dataset_info
-
-    def load_and_prepare_data(self) -> pd.DataFrame:
-        """Loads the CSV data, cleans text, and assigns labels."""
-        df: pd.DataFrame = pd.read_csv(self.file_path)
-
-        # Ensure required columns exist
-        if not {"author", "post_content"}.issubset(df.columns):
-            raise ValueError("❌ CSV must contain 'author' and 'post_content' columns.")
-
-        # Normalize author names and assign labels
-        df["label"] = df["author"].apply(
-            lambda x: 1 if str(x).lower() == self.target_author else 0
-        )
-
-        # Clean and preprocess text
-        df["post_content"] = df["post_content"].apply(self.clean_text)
-
-        return df
 
     @staticmethod
     def clean_text(text: str) -> str:
