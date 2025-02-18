@@ -7,6 +7,7 @@ import pandas as pd
 from loguru import logger as log
 from collections import Counter
 from typing import Dict, List, Tuple, Type, Union, Any
+from scipy.sparse import spmatrix
 
 from sklearn.svm import SVC
 from sklearn.metrics import accuracy_score
@@ -179,7 +180,9 @@ class ModelTrainer:
         self.file_path: str = file_path
         self.target_author: str = target_author.lower()
         self.model_path: str = model_path
-        self.vectorizer: TfidfVectorizer = TfidfVectorizer()
+        self.vectorizer: TfidfVectorizer = TfidfVectorizer(
+            max_features=5000, stop_words="english"
+        )
         self.trained_model: Any = None
 
     def prepare_data(
@@ -228,12 +231,9 @@ class ModelTrainer:
         text = re.sub(r"[^a-zA-Z0-9.,!?;'\"]", " ", text)  # Remove special characters
         return text.strip().lower()
 
-    def extract_features(self, texts: pd.Series) -> Any:
+    def extract_features(self, texts: pd.Series) -> spmatrix:
         """Extracts TF-IDF features from text."""
-        vectorizer = TfidfVectorizer(max_features=5000, stop_words="english")
-        features = vectorizer.fit_transform(texts)
-        self.vectorizer = vectorizer
-        return features.toarray()
+        return self.vectorizer.fit_transform(texts)
 
     def analyze_dataset(self, y: np.ndarray, X: np.ndarray) -> Dict[str, Any]:
         """
