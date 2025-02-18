@@ -3,9 +3,10 @@ import re
 import csv
 import json
 import gzip
-from typing import Dict, Any, List
+from typing import Dict, Tuple, Any
 
 import numpy as np
+import pandas as pd
 from loguru import logger as log
 
 
@@ -97,13 +98,23 @@ def decompress_json_gz(file_path: str) -> str:
 
 
 def save_data_npbin(
-    X_train: np.ndarray, y_train: np.ndarray, X_val: np.ndarray, y_val: np.ndarray
+    X_train: np.ndarray,
+    y_train: np.ndarray,
+    X_val: np.ndarray,
+    y_val: np.ndarray,
+    file_name: str = "train_data.npbin",
 ) -> None:
-    """Save training data as numpy binary files"""
-    np.save("X_train.npy", X_train)
-    np.save("y_train.npy", y_train)
-    np.save("X_val.npy", X_val)
-    np.save("y_val.npy", y_val)
+    """
+    Saves training and validation data in NumPy binary format.
+
+    :param X_train: Training feature matrix.
+    :param y_train: Training labels.
+    :param X_val: Validation feature matrix.
+    :param y_val: Validation labels.
+    :param file_name: Path to save the binary file.
+    """
+    np.savez(file_name, X_train=X_train, y_train=y_train, X_val=X_val, y_val=y_val)
+    log.info(f"✅ Training data saved to {file_name}")
 
 
 class DataHandler:

@@ -1,18 +1,19 @@
 import os
-import json
+import re
+
 import joblib
-import pickle
 import numpy as np
+import pandas as pd
+from loguru import logger as log
+from collections import Counter
 from typing import Dict, List, Tuple, Type, Union, Any
 
-from loguru import logger as log
-
 from sklearn.svm import SVC
+from sklearn.metrics import accuracy_score
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, classification_report
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 from keras.api.models import load_model
@@ -25,88 +26,45 @@ from data import save_data_npbin
 
 
 class Model:
-    def __init__(self, model_type: Type, file_name: str = None) -> None:
-        self.model: Type = model_type()
-        self.file_name: str = file_name or "author_model.pkl"
+    """
+    Class for using pre-trained models.
+    Can either be instanted with an already loaded model, or load one from a given file
+    """
+
+    def __init__(self, loaded_model: Type = None, file_name: str = None) -> None:
+        self.model: Type = loaded_model
+        self.file_name: str = file_name
         self.vectorizer: TfidfVectorizer = TfidfVectorizer()
         self.trained: bool = False
-        self.metrics: str | Dict = None
-        self.history: List = []
 
-    def is_trained(self) -> bool:
-        return self.trained
-
-    def prepare_data(
-        self, data: Dict[str, List[str]]
-    ) -> Tuple[np.ndarray, np.ndarray, Dict[str, int]]:
-        """Reformats incoming data to X, y np.ndarrays for use by the model.
-
-        Call before running train."""
-        texts: List[str] = []
-        labels: List[int] = []
-        label_map: Dict[str, int] = {
-            author: idx for idx, author in enumerate(data.keys())
-        }
-
-        for author, samples in data.items():
-            texts.extend(samples)
-            labels.extend([label_map[author]] * len(samples))
-
-        X: np.ndarray = self.vectorizer.fit_transform(texts).toarray()
-        y: np.ndarray = np.array(labels)
-
-        return X, y
-
-    def train(
-        self,
-        X_train: np.ndarray,
-        y_train: np.ndarray,
-        X_val: np.ndarray,
-        y_val: np.ndarray,
-    ) -> None:
-        """Train the model using the given inputs"""
-        if not self.trained:
-            self.model.fit(X_train, y_train)
-            y_pred = self.model.predict(X_val)
-
-            accuracy = accuracy_score(y_val, y_pred)
-            self.metrics = classification_report(y_val, y_pred, output_dict=True)
-            self.history.append({"accuracy": accuracy, "metrics": self.metrics})
-            self.trained = True
-
-            log.info(f"🎯 Validation Accuracy: {accuracy:.4f}")
-            log.info("📊 Classification Report:")
-            log.info(classification_report(y_val, y_pred))
-            self.save_model()
-        else:
-            log.warning(f"⚠️ Model already trained")
-
-    def save_model(self) -> None:
-        with open(self.file_name, "wb") as f:
-            pickle.dump(self.model, f)
-
-        log.info(f"✅ Model ({self.file_name}) saved")
-
-    def save_vectorizer(self, filename: str = "vectorizer.json") -> None:
-        with open(filename, "w") as f:
-            json.dump(self.vectorizer.vocabulary_, f)
-
-        log.info("✅ Vectorizer saved")
+        if self.file_name and not self.model:
+            self.load_model()
 
     def load_model(self) -> None:
-        with open(self.file_name, "rb") as f:
-            self.model = pickle.load(f)
+        """
+        Loads a trained model and TF-IDF vectorizer from a file.
+        Raises an error if the file does not exist.
+        """
+        if not os.path.exists(self.file_name):
+            raise FileNotFoundError(f"❌ Model file '{self.file_name}' not found.")
 
-        self.trained = True
-        log.info("✅ Model loaded")
+        # Load model and vectorizer
+        try:
+            model_data = joblib.load(self.file_name)
+            self.model = model_data["model"]
+            self.vectorizer = model_data["vectorizer"]
+            self.trained = True
+
+            log.info(f"✅ Model loaded successfully from {self.file_name}")
+        except Exception as e:
+            log.error(f"❌ {e}")
+            exit(1)
 
     def predict(self, text: Union[str, List[str]]) -> np.ndarray:
         """Interpret the given text and try to determine whether it
         possibly matches our author"""
-        if not self.trained or not self.model:
-            raise LookupError(
-                "❌ Model must be trained or loaded before making predictions."
-            )
+        if not self.model:
+            raise RuntimeError("❌ Model must be loaded before making predictions.")
 
         text = [text] if isinstance(text, str) else text
         X_transformed = self.vectorizer.transform(text).toarray()
@@ -161,7 +119,7 @@ def train_random_forest(X: np.ndarray, y: np.ndarray) -> RandomForestClassifier:
 
     predictions = model.predict(X_test)
     accuracy = accuracy_score(y_test, predictions)
-    print(f"🧠 Model Accuracy: {accuracy:.2f}")
+    log.info(f"🧠 Model Accuracy: {accuracy:.2f}")
 
     return model
 
@@ -197,36 +155,217 @@ def train_lstm(texts: list[str], labels: list[str]) -> tuple[Sequential, Any]:
     )
 
     loss, accuracy = model.evaluate(X_test, y_test)
-    print(f"🧠 LSTM Accuracy: {accuracy:.2f}")
+    log.info(f"🧠 LSTM Accuracy: {accuracy:.2f}")
 
     return model, tokenizer
 
 
-def main() -> None:
+class ModelTrainer:
+    """
+    Picks and trains a Model based on a given data set to
+    recognize an author's writing style.
+    """
+
+    def __init__(
+        self, file_path: str, target_author: str, model_path: str = "random_forest.pkl"
+    ):
+        """
+        Initializes the training pipeline.
+
+        :param file_path: Path to the CSV dataset.
+        :param target_author: The username of the author to classify.
+        :param model_path: Path to save the trained model.
+        """
+        self.file_path: str = file_path
+        self.target_author: str = target_author.lower()
+        self.model_path: str = model_path
+        self.vectorizer: TfidfVectorizer = TfidfVectorizer()
+        self.trained_model: Any = None
+
+    def prepare_data(
+        self, file_path: str
+    ) -> Tuple[np.ndarray, np.ndarray, Dict[str, Any]]:
+        """
+        Loads, analyzes, and preprocesses the dataset.
+
+        :param file_path: Path to the CSV dataset.
+        :return: Tuple (feature matrix, labels, dataset information).
+        """
+        df: pd.DataFrame = pd.read_csv(file_path)
+        if not {"author", "post_content"}.issubset(df.columns):
+            raise ValueError("❌ CSV must contain 'author' and 'post_content' columns.")
+
+        # Extract TF-IDF features
+        X: np.ndarray = self.vectorizer.fit_transform(df["post_content"]).toarray()
+        y: np.ndarray = df["author"].values
+
+        # Analyze dataset characteristics
+        dataset_info: Dict[str, Any] = self.analyze_dataset(y, X)
+        return X, y, dataset_info
+
+    def load_and_prepare_data(self) -> pd.DataFrame:
+        """Loads the CSV data, cleans text, and assigns labels."""
+        df: pd.DataFrame = pd.read_csv(self.file_path)
+
+        # Ensure required columns exist
+        if not {"author", "post_content"}.issubset(df.columns):
+            raise ValueError("❌ CSV must contain 'author' and 'post_content' columns.")
+
+        # Normalize author names and assign labels
+        df["label"] = df["author"].apply(
+            lambda x: 1 if str(x).lower() == self.target_author else 0
+        )
+
+        # Clean and preprocess text
+        df["post_content"] = df["post_content"].apply(self.clean_text)
+
+        return df
+
+    @staticmethod
+    def clean_text(text: str) -> str:
+        """Cleans and normalizes text by removing unnecessary characters."""
+        text = re.sub(r"\s+", " ", text)  # Normalize whitespace
+        text = re.sub(r"[^a-zA-Z0-9.,!?;'\"]", " ", text)  # Remove special characters
+        return text.strip().lower()
+
+    def extract_features(self, texts: pd.Series) -> Any:
+        """Extracts TF-IDF features from text."""
+        vectorizer = TfidfVectorizer(max_features=5000, stop_words="english")
+        features = vectorizer.fit_transform(texts)
+        self.vectorizer = vectorizer
+        return features.toarray()
+
+    def analyze_dataset(self, y: np.ndarray, X: np.ndarray) -> Dict[str, Any]:
+        """
+        Analyzes dataset characteristics for model selection.
+
+        :param y: Labels (author names).
+        :param X: Feature matrix.
+        :return: Dictionary containing dataset metadata.
+        """
+        num_samples = len(y)
+        num_classes = len(set(y))
+        class_distribution = Counter(y)
+        class_balance = min(class_distribution.values()) / max(
+            class_distribution.values()
+        )
+
+        dataset_info: Dict[str, Any] = {
+            "num_samples": num_samples,
+            "num_classes": num_classes,
+            "vocab_size": X.shape[1],
+            "class_balance": class_balance,
+        }
+
+        log.info(f"📊 Dataset Analysis: {dataset_info}")
+        return dataset_info
+
+    def select_best_model(
+        self, dataset_info: Dict[str, Any]
+    ) -> MultinomialNB | LogisticRegression | RandomForestClassifier | SVC:
+        """
+        Automatically selects the best model based on dataset characteristics.
+
+        :param dataset_info: Metadata of dataset.
+        """
+        num_samples: int = dataset_info["num_samples"]
+        class_balance: float = dataset_info["class_balance"]
+
+        if num_samples < 1000:
+            log.info("🔹 Small dataset detected. Choosing Naive Bayes for efficiency.")
+            return MultinomialNB()
+        elif class_balance < 0.5:
+            log.info(
+                "🔹 Imbalanced dataset detected. Choosing Logistic Regression for better generalization."
+            )
+            return LogisticRegression()
+        elif num_samples > 5000:
+            log.info(
+                "🔹 Large dataset detected. Choosing Random Forest for scalability and interpretability."
+            )
+            return RandomForestClassifier(n_estimators=100, random_state=42)
+        else:
+            log.info(
+                "🔹 Balanced and sufficient data detected. Choosing SVM for accuracy."
+            )
+            return SVC()
+
+    def train(
+        self,
+        model: MultinomialNB | LogisticRegression | RandomForestClassifier | SVC,
+        X_train: np.ndarray,
+        y_train: np.ndarray,
+        X_val: np.ndarray,
+        y_val: np.ndarray,
+    ) -> None:
+        """
+        Trains the selected model and evaluates performance.
+
+        :param X_train: Training feature matrix.
+        :param y_train: Training labels.
+        :param X_val: Validation feature matrix.
+        :param y_val: Validation labels.
+
+        Returns a trained model.
+        """
+        if not model:
+            raise ValueError("❌ No model selected. Run 'select_best_model()' first.")
+
+        self.trained_model = model.fit(X_train, y_train)
+        accuracy: float = model.score(X_val, y_val)
+        log.info(f"🧠 Model accuracy: {accuracy:.2f}")
+
+    def save_model(self, model_path: str = "model.pkl") -> None:
+        """
+        Saves the trained model and vectorizer.
+
+        :param model_path: Path to save the model.
+        """
+        if not self.trained_model:
+            return
+        if not self.vectorizer:
+            return
+
+        joblib.dump(
+            {"model": self.trained_model, "vectorizer": self.vectorizer}, model_path
+        )
+        log.info(f"✅ Model saved to {model_path}")
+
+
+def run_model() -> None:
+    """Example usage of running a pre-trained model using the Model class"""
     try:
-        with open("data.json", "r") as f:
-            data: Dict[str, List[str]] = json.load(f)
-    except (FileNotFoundError("data.json file not found"), Exception) as e:
-        log.error(e)
-        return
+        model = Model(file_name="model.pkl")
+        model.load_model()
+        sample_text = "This is an example post discussing AI."
+        prediction = model.predict(sample_text)
+        print(f"Prediction: {'Author' if prediction[0] == 1 else 'Other'}")
+    except FileNotFoundError as e:
+        print(e)
 
-    models = {
-        "Naive Bayes": MultinomialNB,
-        "Logistic Regression": LogisticRegression,
-        "Support Vector Machine": SVC,
-    }
 
-    for model_name, model_type in models.items():
-        log.info(f"Training {model_name}...")
-        model = Model(model_type)
-        X, y = model.prepare_data(data)
+def train_model() -> None:
+    """Loads CSV data, automatically selects a model, trains it, and saves results."""
+    try:
+        file_path: str = "forum_posts.csv"
+        model_trainer: ModelTrainer = ModelTrainer()
+
+        X, y, dataset_info = model_trainer.prepare_data(file_path)
+        best_model = model_trainer.select_best_model(dataset_info)
+
         X_train, X_val, y_train, y_val = train_test_split(
             X, y, test_size=0.2, random_state=42
         )
+
         save_data_npbin(X_train, y_train, X_val, y_val)
-        model.train(X_train, y_train, X_val, y_val)
-        model.save_vectorizer()
+        model_trainer.train(best_model, X_train, y_train, X_val, y_val)
+        model_trainer.save_model()
+
+    except FileNotFoundError:
+        log.error("❌ forum_posts.csv file not found.")
+    except Exception as e:
+        log.error(f"❌ Unexpected error: {e}")
 
 
 if __name__ == "__main__":
-    main()
+    train_model()

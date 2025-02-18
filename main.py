@@ -2,6 +2,7 @@ import asyncio
 
 from dotenv import load_dotenv
 
+from model import Model
 from urls import generate_url_filters
 from data import DataHandler, get_keywords
 from crawler import Crawler, DETECTION, DISCOVERY, get_seed_urls
