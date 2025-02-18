@@ -1,5 +1,6 @@
 import os
 import re
+import json
 
 import joblib
 import numpy as np
@@ -230,7 +231,7 @@ class ModelTrainer:
             "class_balance": class_balance,
         }
 
-        log.info(f"📊 Dataset Analysis: {dataset_info}")
+        log.info(f"📊 Dataset Analysis: {json.dumps(dataset_info, indent=2)}")
         return dataset_info
 
     def select_best_model(
@@ -305,12 +306,11 @@ def run_model() -> None:
     """Example usage of running a pre-trained model using the Model class"""
     try:
         model = Model(model_file="model.pkl")
-        model.load_model()
         sample_text = "This is an example post discussing AI."
         prediction = model.predict(sample_text)
-        print(f"Prediction: {'Author' if prediction[0] == 1 else 'Other'}")
+        log.info(f"Prediction: {prediction[0]}")
     except FileNotFoundError as e:
-        print(e)
+        log.error(f"❌ Unexpected error: {e}")
 
 
 def train_model() -> None:
@@ -319,8 +319,8 @@ def train_model() -> None:
     Loads CSV data, automatically selects a model, trains it, and saves results.
     """
     try:
-        file_path: str = "forum_posts.csv"
-        model_trainer: ModelTrainer = ModelTrainer()
+        file_path = "forum_posts.csv"
+        model_trainer = ModelTrainer()
 
         X, y, dataset_info = model_trainer.load_and_prepare_data(file_path)
         best_model = model_trainer.select_best_model(dataset_info)
@@ -334,7 +334,7 @@ def train_model() -> None:
         model_trainer.save_model()
 
     except FileNotFoundError:
-        log.error("❌ forum_posts.csv file not found.")
+        log.error(f"❌ {file_path} file not found.")
     except Exception as e:
         log.error(f"❌ Unexpected error: {e}")
 
