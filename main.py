@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from urls import generate_url_filters
 from data import DataHandler, get_keywords
 from crawler import Crawler, DETECTION, DISCOVERY, get_seed_urls
-from extractors import DATA_EXTRACTION
+from extractors import DATA_EXTRACTORS
 
 load_dotenv()
 
@@ -36,7 +36,7 @@ async def main():
         workflow=workflow,
         model=model,
         tokenizer=tokenizer,
-        callbacks=DATA_EXTRACTION,
+        callbacks=DATA_EXTRACTORS,
         keywords=get_keywords(),
     ) as crawler:
         await crawler.run(seed_urls)

@@ -22,10 +22,11 @@ class UrlFilter:
         self.subdomain = subdomain or ""  # restrict filtering to specific subdomain
         self.venture = venture  # whether to allow off-site urls
         self.follow_paths = follow_paths or []  # list of regex path patterns
+        self.seen = set()  # visited URLs
+
         log.info(
             f"filter created for domain {self.subdomain}.{self.domain} with follow rules {follow_paths}"
         )
-        self.seen = set()  # visited URLs
 
     def is_valid_ext(self, url: str) -> bool:
         """ignore non-crawlable documents"""

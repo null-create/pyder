@@ -4,7 +4,6 @@ w3lib
 python-dotenv
 tldextract 
 loguru
-flask
 beautifulsoup4
 numpy 
 pandas 
@@ -14,4 +13,3 @@ joblib
 keras
 keras_hub
 tensorflow
-playwright

@@ -44,15 +44,15 @@ def generate_unique_filename(directory: str, filename: str) -> str:
     return unique_filename
 
 
-def get_keywords() -> list[str]:
-    file = "keywords.txt"
-    if not os.path.exists(file):
+def get_starting_data() -> dict:
+    file = "seed-data.json"
+    if not os.path.exits(file):
         raise FileNotFoundError(f"❌ {file} file not found")
 
     with open(file, "r") as f:
-        keywords = f.read().splitlines()
+        seed_data = json.load(fp=f)
 
-    return keywords
+    return seed_data
 
 
 def preprocess_text(text: str) -> str:
@@ -60,40 +60,6 @@ def preprocess_text(text: str) -> str:
     text = re.sub(r"\s+", " ", text)  # Normalize whitespace
     text = re.sub(r"[^a-zA-Z0-9.,!?;'\"]", " ", text)  # Remove unnecessary characters
     return text.lower().strip()
-
-
-def save_author_data_for_training(
-    scraped_data: List[Dict[str, str]],
-    author_name: str,
-    output_file: str = None,
-) -> None:
-    """
-    Processes scraped data into a CSV file for training.
-
-    - `scraped_data`: List of dicts with "text" and optionally "author".
-    - `author_name`: Name of the author to label known writings.
-    - `output_file`: File to save processed data.
-    """
-    if not output_file:
-        output_file = f"{author_name}_data.csv"
-
-    with open(output_file, "w", newline="", encoding="utf-8") as file:
-        writer = csv.writer(file)
-        writer.writerow(["text", "label"])  # CSV header
-
-        for entry in scraped_data:
-            text = preprocess_text(entry.get("text", ""))
-            if not text:
-                continue  # Skip empty text
-
-            label = (
-                "Author"
-                if entry.get("author", "").lower() == author_name.lower()
-                else "Other"
-            )
-            writer.writerow([text, label])
-
-    log.info(f"✅ Processed data saved to {output_file}")
 
 
 def decompress_json_gz(file_path: str) -> str:
@@ -138,49 +104,6 @@ def save_data_npbin(
     np.save("y_train.npy", y_train)
     np.save("X_val.npy", X_val)
     np.save("y_val.npy", y_val)
-
-
-def save_data_to_json(
-    data: Dict[str, Any], directory: str, filename: str, compress: bool = False
-) -> str:
-    """
-    Saves extracted data as a JSON file in the specified directory.
-
-    Args:
-        data (Dict[str, Any]): Extracted data to save.
-        directory (str): Directory where the file should be saved.
-        filename (str): Name of the JSON file.
-        compress (bool): If True, saves as a .json.gz compressed file.
-
-    Returns:
-        str: Path to the saved JSON file.
-    """
-    ensure_directory_exists(directory)
-
-    # Adjust filename extension for compression
-    if compress and not filename.endswith(".gz"):
-        filename += ".gz"
-
-    unique_filename = generate_unique_filename(directory, filename)
-    file_path = os.path.join(directory, unique_filename)
-
-    try:
-        if compress:
-            with gzip.open(file_path, "wt", encoding="utf-8") as gz_file:
-                json.dump(data, gz_file, indent=2, ensure_ascii=False)
-        else:
-            with open(file_path, "w", encoding="utf-8") as json_file:
-                json.dump(data, json_file, indent=2, ensure_ascii=False)
-
-        log.info(f"✅ Data successfully saved to: {file_path}")
-        return file_path
-
-    except IOError as e:
-        log.error(f"❌ IOError while saving file: {e}")
-        return ""
-
-    except Exception as e:
-        log.error(f"❌ Exception while saving file: {e}")
 
 
 class DataHandler:

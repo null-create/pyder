@@ -7,16 +7,17 @@ from typing import Dict, List, Tuple, Any, Optional
 import httpx
 from httpx import Response, URL
 from parsel import Selector
-from loguru import logger as log
 from bs4 import BeautifulSoup
+from numpy import ndarray
+from loguru import logger as log
 from dotenv import load_dotenv
 
 from keras.api.preprocessing.sequence import pad_sequences
 
+from extractors import DATA_EXTRACTORS, ExtractorCallback
 from model import Model, load_trained_model
-from extractors import DATA_EXTRACTION, ExtractorCallback
-from urls import UrlFilter, get_seed_urls, generate_url_filters
-from data import DataHandler, get_keywords, get_model_and_tokenizer_filenames
+from urls import UrlFilter, generate_url_filters
+from data import DataHandler, get_starting_data, get_model_and_tokenizer_filenames
 
 load_dotenv()
 
@@ -46,43 +47,67 @@ class Crawler:
         filters: Dict[str, UrlFilter],
         data_handler: DataHandler,
         workflow: str,
-        author_name: str = None,
+        author: str = None,
         model: Model = None,
         tokenizer: Optional[Any] = None,
         keywords: list[str] = None,
+        callbacks: list[ExtractorCallback] = None,
         search_depth: int = None,
         export_data: bool = False,
     ) -> None:
         self.url_filters = filters  # url filter class
         self.data = data_handler  # data handler class
         self.workflow = workflow  # workflow type
-        self.author_name = author_name or ""  # name of author to scrape
+        self.author = author or ""  # name of author to scrape
         self.model = model  # pre-trained model, if applicable
         self.tokenizer = tokenizer  # ml tokenizer
         self.keywords = keywords or []  # list of keywords to search for
+        self.callbacks = callbacks or []  # data extractor callbacks
         self.search_depth = search_depth or 10  # url pool iterations
         self.export = export_data  # flag for saving json data
+
+        if self.author == "" and self.workflow == DETECTION:
+            log.error("No author set for detection mode!")
+            exit(1)
 
     async def get(self, url: str) -> httpx.Response:
         """attempts to run a GET request on a given URL"""
         return await self.session.get(url, follow_redirects=True, timeout=1.0)
 
-    def predict_author(self, text: str) -> str:
+    def predict_author(self, text: str) -> ndarray:
         """sends text to the model to predict whether it was written by a specific author"""
         if self.tokenizer:
             sequence = self.tokenizer.texts_to_sequences([text])
             padded_sequence = pad_sequences(sequence, maxlen=100)
-            prediction = self.model.predict(padded_sequence)[0]
-            return "Author" if prediction > 0.5 else "Other"
+            return self.model.predict(padded_sequence)[0]
 
         else:
-            return "Author" if self.model.predict([text])[0] == 1 else "Other"
+            return self.model.predict([text])[0]
 
-    def extract_posts(self, soup: BeautifulSoup, url: URL) -> None:
+    def run_callbacks(self, responses: list[Response]) -> list:
+        """Run a list of data extraction callbacks over the given list of responses"""
+        if len(responses) == 0:
+            return
+
+        extracted_data = []
+        for response in responses:
+            for callback in self.callbacks:
+                data = callback(
+                    BeautifulSoup(response.text, "html.parser"), response.url
+                )
+                extracted_data.append(data)
+
+        if self.export:
+            self.data.export(extracted_data)
+
+        return extracted_data
+
+    def extract_posts(self, soup: BeautifulSoup, url: URL) -> list[Dict[str, str]]:
         """Extracts forum posts by the target author from a given thread URL."""
-        posts = []
+        if self.author == "":
+            return []
 
-        # Forum-specific extraction logic
+        posts = []
         for post in soup.find_all(
             "div", class_=re.compile(r"post|comment|message", re.IGNORECASE)
         ):
@@ -103,18 +128,17 @@ class Crawler:
                     timestamp_tag.get_text(strip=True) if timestamp_tag else "Unknown"
                 )
 
-                if post_author == self.author_name:
+                if post_author == self.author:
                     posts.append(
                         {
                             "author": post_author,
                             "post_content": post_content,
                             "timestamp": timestamp,
-                            "thread_url": url,
+                            "thread_url": str(url),
                         }
                     )
 
-        if self.export:
-            self.data.export(posts)
+        return posts
 
     def process_responses(self, responses: list[Response]) -> None:
         """
@@ -126,21 +150,23 @@ class Crawler:
         if len(responses) == 0:
             return
 
-        extracted_data = {"url": responses[0].url}
+        extracted_data = {"url": responses[0].url, "author": []}
 
         for response in responses:
-            if self.workflow == DISCOVERY:
-                self.extract_posts(BeautifulSoup(response.text), str(response.url))
+            posts = self.extract_posts(BeautifulSoup(response.text), response.url)
 
-            elif self.workflow == DETECTION and self.model:
-                log.info("[!] running author prediction...")
-                extracted_data["author_prediction"] = self.predict_author(
-                    extracted_data.get("main_content", "")
-                )
-                log.info(f"[+] model guess: {extracted_data['author_prediction']}")
+            if self.workflow == DETECTION and self.model:
+                for post in posts:
+                    guess = self.predict_author(post["post_content"])
+                    post["author_prediction"] = guess
+                    log.info(
+                        f"[+] {post['author']} = {self.author} likelyhood: {guess}"
+                    )
+
+            extracted_data[self.author] += posts
 
         if self.export:
-            self.data.export(extracted_data)
+            self.data.export(extracted_data[self.author])
 
     def find_urls(self, responses: List[httpx.Response]) -> List[str]:
         """find valid urls in responses"""
@@ -195,6 +221,7 @@ class Crawler:
 async def run_crawler(
     seed_urls: list[str],
     workflow: str,
+    author: str,
     keywords: list[str] = None,
     model: Model = None,
     tokenizer: Optional[Any] = None,
@@ -210,9 +237,9 @@ async def run_crawler(
             output_format="csv" if workflow == DISCOVERY else "json",
         ),
         workflow=workflow,
+        author=author,
         model=model,
         tokenizer=tokenizer,
-        callbacks=DATA_EXTRACTION,
         keywords=keywords,
         export_data=True,
     ) as crawler:
@@ -221,7 +248,9 @@ async def run_crawler(
 
 if __name__ == "__main__":
     workflow = DISCOVERY
-    keywords = get_keywords()
-    seed_urls = get_seed_urls()
+    starting_data = get_starting_data()
+    author = starting_data["author"]
+    keywords = starting_data["keywords"]
+    seed_urls = starting_data["urls"]
 
-    asyncio.run(run_crawler(seed_urls, workflow, keywords))
+    asyncio.run(run_crawler(seed_urls, workflow, author, keywords))

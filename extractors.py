@@ -7,7 +7,6 @@ import httpx
 from httpx import URL
 from bs4 import BeautifulSoup
 from loguru import logger as log
-from playwright.sync_api import sync_playwright
 
 import nltk
 from nltk.tag import pos_tag
@@ -18,7 +17,6 @@ nltk.download("punkt_tab")
 nltk.download("maxent_ne_chunker_tab")
 nltk.download("averaged_perceptron_tagger_eng")
 
-from data import save_author_data_for_training, get_keywords
 
 # file for custom call backs defined in EXTRACTION RULES used by the
 # crawler class to handle various discoveries and scenaries
@@ -276,8 +274,9 @@ async def analyze_webpage(
                     print("No occurrences found.")
 
         extracted_data = []
-        for extraction_fn in DATA_EXTRACTION:
-            extracted_data.append(extraction_fn(soup, url))
+        for extraction_fn in DATA_EXTRACTORS:
+            data = extraction_fn(soup, url)
+            extracted_data.append(data)
 
         if view_results:
             ans = input("View results? (y/n): ")
@@ -291,7 +290,7 @@ async def analyze_webpage(
         log.error(f"❌ Error fetching page: {e}")
 
 
-DATA_EXTRACTION: list[ExtractorCallback] = [
+DATA_EXTRACTORS: list[ExtractorCallback] = [
     extract_metadata,  # Extract metadata (title, description, keywords)
     extract_names,  # Extract any possible names
     extract_main_content,  # Extract main site content
@@ -306,6 +305,6 @@ if __name__ == "__main__":
     import asyncio
 
     url = "https://apnews.com/"
-    keywords = get_keywords()
+    keywords = []
 
     asyncio.run(analyze_webpage(URL(url), [kw.strip() for kw in keywords]))
