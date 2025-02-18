@@ -5,7 +5,7 @@ import httpx
 from loguru import logger as log
 
 
-class Navigator:
+class SiteInfo:
     def __init__(self, base_url: str, timeout: int = 3) -> None:
         """
         Initializes the Navigator class with the base URL of the website.
@@ -146,7 +146,7 @@ class Navigator:
 
 # Example usage:
 if __name__ == "__main__":
-    robots_client = Navigator("http://localhost:8000")
+    robots_client = SiteInfo("http://localhost:8000")
     robots_client.fetch()
     print("Rules for '*':", robots_client.get_rules("*"))
     print("Site urls from sitemap:", ", ".join(robots_client.get_sitemap_urls()))

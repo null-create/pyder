@@ -150,7 +150,7 @@ class Crawler:
         if len(responses) == 0:
             return
 
-        extracted_data = {}
+        extracted_data = {self.author: []}
         for response in responses:
             posts = self.extract_posts(BeautifulSoup(response.text), response.url)
 

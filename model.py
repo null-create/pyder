@@ -32,13 +32,13 @@ class Model:
     Can either be instanted with an already loaded model, or load one from a given file
     """
 
-    def __init__(self, loaded_model: Type = None, file_name: str = None) -> None:
+    def __init__(self, loaded_model: Type = None, model_file: str = None) -> None:
         self.model: Type = loaded_model
-        self.file_name: str = file_name
+        self.model_file: str = model_file
         self.vectorizer: TfidfVectorizer = TfidfVectorizer()
         self.trained: bool = False
 
-        if self.file_name and not self.model:
+        if self.model_file and not self.model:
             self.load_model()
 
     def load_model(self) -> None:
@@ -46,22 +46,22 @@ class Model:
         Loads a trained model and TF-IDF vectorizer from a file.
         Raises an error if the file does not exist.
         """
-        if not os.path.exists(self.file_name):
-            raise FileNotFoundError(f"❌ Model file '{self.file_name}' not found.")
+        if not os.path.exists(self.model_file):
+            raise FileNotFoundError(f"❌ Model file '{self.model_file}' not found.")
 
         # Load model and vectorizer
         try:
-            model_data = joblib.load(self.file_name)
+            model_data = joblib.load(self.model_file)
             self.model = model_data["model"]
             self.vectorizer = model_data["vectorizer"]
             self.trained = True
 
-            log.info(f"✅ Model loaded successfully from {self.file_name}")
+            log.info(f"✅ Model loaded successfully from {self.model_file}")
         except Exception as e:
             log.error(f"❌ {e}")
             exit(1)
 
-    def predict(self, text: Union[str, List[str]]) -> np.ndarray:
+    def predict(self, text: Union[str, List[str], np.ndarray[Any]]) -> np.ndarray:
         """Interpret the given text and try to determine whether it
         possibly matches our author"""
         if not self.model:
@@ -176,7 +176,7 @@ class ModelTrainer:
         )
         self.trained_model: Any = None
 
-    def prepare_data(
+    def load_and_prepare_data(
         self, training_data: str
     ) -> Tuple[np.ndarray, np.ndarray, Dict[str, Any]]:
         """
@@ -278,14 +278,12 @@ class ModelTrainer:
         :param y_train: Training labels.
         :param X_val: Validation feature matrix.
         :param y_val: Validation labels.
-
-        Returns a trained model.
         """
         if not model:
             raise ValueError("❌ No model selected. Run 'select_best_model()' first.")
 
         self.trained_model = model.fit(X_train, y_train)
-        accuracy: float = model.score(X_val, y_val)
+        accuracy = model.score(X_val, y_val)
         log.info(f"🧠 Model accuracy: {accuracy:.2f}")
 
     def save_model(self, model_path: str = "model.pkl") -> None:
@@ -295,8 +293,6 @@ class ModelTrainer:
         :param model_path: Path to save the model.
         """
         if not self.trained_model:
-            return
-        if not self.vectorizer:
             return
 
         joblib.dump(
@@ -308,7 +304,7 @@ class ModelTrainer:
 def run_model() -> None:
     """Example usage of running a pre-trained model using the Model class"""
     try:
-        model = Model(file_name="model.pkl")
+        model = Model(model_file="model.pkl")
         model.load_model()
         sample_text = "This is an example post discussing AI."
         prediction = model.predict(sample_text)
@@ -318,12 +314,15 @@ def run_model() -> None:
 
 
 def train_model() -> None:
-    """Loads CSV data, automatically selects a model, trains it, and saves results."""
+    """
+    Example usage of training a new model.
+    Loads CSV data, automatically selects a model, trains it, and saves results.
+    """
     try:
         file_path: str = "forum_posts.csv"
         model_trainer: ModelTrainer = ModelTrainer()
 
-        X, y, dataset_info = model_trainer.prepare_data(file_path)
+        X, y, dataset_info = model_trainer.load_and_prepare_data(file_path)
         best_model = model_trainer.select_best_model(dataset_info)
 
         X_train, X_val, y_train, y_val = train_test_split(

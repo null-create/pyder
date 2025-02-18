@@ -1,5 +1,6 @@
 import re
 import json
+import asyncio
 from urllib.parse import urljoin, urlparse
 from typing import Callable, Dict, List, Any
 
@@ -12,6 +13,8 @@ import nltk
 from nltk.tag import pos_tag
 from nltk.chunk import ne_chunk
 from nltk.tokenize import word_tokenize
+
+from data import get_starting_data
 
 nltk.download("punkt_tab")
 nltk.download("maxent_ne_chunker_tab")
@@ -79,7 +82,7 @@ def extract_names(soup: BeautifulSoup, _: URL) -> Dict[str, List[str]]:
     return {"names": unique_names if unique_names else ["No names found"]}
 
 
-def extract_posts(soup: BeautifulSoup, _: URL, author: str) -> list[Dict[str, str]]:
+def extract_posts(soup: BeautifulSoup, url: URL, author: str) -> list[Dict[str, str]]:
     """Extracts forum posts by the target author from a given thread URL."""
 
     # Forum-specific extraction logic
@@ -109,7 +112,7 @@ def extract_posts(soup: BeautifulSoup, _: URL, author: str) -> list[Dict[str, st
                         "author": post_author,
                         "post_content": post_content,
                         "timestamp": timestamp,
-                        "thread_url": url,
+                        "thread_url": str(url),
                     }
                 )
 
@@ -273,13 +276,20 @@ async def analyze_webpage(
                 else:
                     print("No occurrences found.")
 
+        extracted_posts = extract_posts(soup, url, "CHANGEME")
+        if view_results and len(extracted_posts) > 0:
+            ans = input("View post extraction posts? (y/n): ")
+            if ans.lower() == "y":
+                for i, post in enumerate(extracted_posts):
+                    print(f"{i+1}: {json.dumps(post, indent=2)}")
+
         extracted_data = []
         for extraction_fn in DATA_EXTRACTORS:
             data = extraction_fn(soup, url)
             extracted_data.append(data)
 
-        if view_results:
-            ans = input("View results? (y/n): ")
+        if view_results and len(extracted_data) > 0:
+            ans = input("View data extraction results? (y/n): ")
             if ans.lower() == "y":
                 for i, item in enumerate(extracted_data):
                     print(f"{i+1}: {json.dumps(item, indent=2)}\n")
@@ -300,11 +310,9 @@ DATA_EXTRACTORS: list[ExtractorCallback] = [
     extract_file_downloads,  # Extract downloadable files
 ]
 
-# Example usage
 if __name__ == "__main__":
-    import asyncio
+    starting_data = get_starting_data()
+    url = starting_data["urls"][0]
+    keywords = starting_data["keywords"]
 
-    url = "https://apnews.com/"
-    keywords = []
-
-    asyncio.run(analyze_webpage(URL(url), [kw.strip() for kw in keywords]))
+    asyncio.run(analyze_webpage(URL(url), [kw.strip() for kw in keywords], True))

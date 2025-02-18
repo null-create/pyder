@@ -118,17 +118,6 @@ def get_subdomain(url: str) -> str:
     return extracted.subdomain if extracted.subdomain else ""
 
 
-def get_seed_urls() -> list[str]:
-    seed_file = "seed_urls.txt"
-    if not os.path.exists(seed_file):
-        raise FileNotFoundError("seed_urls.txt not found")
-
-    with open(seed_file, "r") as f:
-        urls = f.read().splitlines()
-
-    return urls
-
-
 IGNORED_EXTENSIONS = [
     # archives
     "7z",

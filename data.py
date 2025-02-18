@@ -46,6 +46,10 @@ def generate_unique_filename(directory: str, filename: str) -> str:
 
 
 def get_starting_data() -> dict:
+    """
+    Opens and returns the contents of seed-data.json file.
+    This file is used for the web crawler's discovery mode.
+    """
     file = "seed-data.json"
     if not os.path.exits(file):
         raise FileNotFoundError(f"❌ {file} file not found")
@@ -151,7 +155,7 @@ class DataHandler:
             self._save_csv(data)
 
     def _save_json(self, data: Dict[str, Any] | list[Dict[str, Any]]) -> None:
-        """Appends extracted data to a JSON file."""
+        """Appends extracted data to a JSON file. Used only in detection mode."""
         try:
             if self.compress:
                 with gzip.open(
@@ -166,7 +170,7 @@ class DataHandler:
             log.error(f"❌ Error saving JSON: {e}")
 
     def _save_csv(self, data: Dict[str, Any] | list[Dict[str, Any]]) -> None:
-        """Appends extracted data to a CSV file."""
+        """Appends extracted data to a CSV file. Used only during discovery mode."""
         try:
             file_exists = os.path.isfile(self.output_file)
 
