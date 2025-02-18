@@ -87,7 +87,7 @@ class Crawler:
     def run_callbacks(self, responses: list[Response]) -> list:
         """Run a list of data extraction callbacks over the given list of responses"""
         if len(responses) == 0:
-            return
+            return []
 
         extracted_data = []
         for response in responses:
@@ -150,8 +150,7 @@ class Crawler:
         if len(responses) == 0:
             return
 
-        extracted_data = {"url": responses[0].url, "author": []}
-
+        extracted_data = {}
         for response in responses:
             posts = self.extract_posts(BeautifulSoup(response.text), response.url)
 
