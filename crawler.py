@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 
 from keras.api.preprocessing.sequence import pad_sequences
 
-from extractors import DATA_EXTRACTORS, ExtractorCallback
+from extractors import POST_CONTENT_EXTRACTORS, ExtractorCallback
 from model import Model, load_trained_model
 from urls import UrlFilter, generate_url_filters
 from data import DataHandler, get_starting_data, get_model_and_tokenizer_filenames
@@ -84,7 +84,7 @@ class Crawler:
         else:
             return self.model.predict([text])[0]
 
-    def run_callbacks(self, responses: list[Response]) -> list:
+    def run_callbacks(self, responses: list[Response]) -> None:
         """Run a list of data extraction callbacks over the given list of responses"""
         if len(responses) == 0:
             return []
@@ -93,20 +93,19 @@ class Crawler:
         for response in responses:
             for callback in self.callbacks:
                 data = callback(
-                    BeautifulSoup(response.text, "html.parser"), response.url
+                    BeautifulSoup(response.text, "html.parser"),
+                    response.url,
+                    self.author,
                 )
-                extracted_data.append(data)
+                if isinstance(data, list):
+                    extracted_data += data
+                elif isinstance(data, dict):
+                    extracted_data.append(data)
 
         if self.export:
             self.data.export(extracted_data)
 
-        return extracted_data
-
-    def extract_posts(self, soup: BeautifulSoup, url: URL) -> list[Dict[str, str]]:
-        """Extracts forum posts by the target author from a given thread URL."""
-        if self.author == "":
-            return []
-
+    def extract_posts(self, soup: BeautifulSoup, url: URL) -> list[Dict[str, Any]]:
         posts = []
         for post in soup.find_all(
             "div", class_=re.compile(r"post|comment|message", re.IGNORECASE)
@@ -123,12 +122,13 @@ class Crawler:
 
             if author_tag and content_tag:
                 post_author = author_tag.get_text(strip=True).lower()
-                post_content = content_tag.get_text(strip=True)
-                timestamp = (
-                    timestamp_tag.get_text(strip=True) if timestamp_tag else "Unknown"
-                )
-
                 if post_author == self.author:
+                    post_content = content_tag.get_text(strip=True)
+                    timestamp = (
+                        timestamp_tag.get_text(strip=True)
+                        if timestamp_tag
+                        else "Unknown"
+                    )
                     posts.append(
                         {
                             "author": post_author,
@@ -240,6 +240,7 @@ async def run_crawler(
         model=model,
         tokenizer=tokenizer,
         keywords=keywords,
+        callbacks=POST_CONTENT_EXTRACTORS,
         export_data=True,
     ) as crawler:
         await crawler.run(seed_urls)
