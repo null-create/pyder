@@ -123,7 +123,11 @@ class Crawler:
             if author_tag and content_tag:
                 post_author = author_tag.get_text(strip=True).lower()
                 if post_author == self.author:
-                    post_content = content_tag.get_text(strip=True)
+                    post_content = (
+                        content_tag.get_text(strip=True)
+                        if post_content
+                        else "Unable to retrive post content"
+                    )
                     timestamp = (
                         timestamp_tag.get_text(strip=True)
                         if timestamp_tag

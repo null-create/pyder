@@ -51,7 +51,7 @@ def get_starting_data() -> dict:
     This file is used for the web crawler's discovery mode.
     """
     file = "seed-data.json"
-    if not os.path.exits(file):
+    if not os.path.exists(file):
         raise FileNotFoundError(f"❌ {file} file not found")
 
     with open(file, "r") as f:

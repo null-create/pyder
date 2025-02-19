@@ -1,8 +1,8 @@
 import re
 from collections import Counter
+from typing import Dict
 
 import numpy as np
-from loguru import logger as log
 
 import nltk
 from nltk.corpus import stopwords

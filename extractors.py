@@ -107,7 +107,11 @@ def extract_posts(soup: BeautifulSoup, url: URL, author: str) -> list[Dict[str, 
         if author_tag and content_tag:
             post_author = author_tag.get_text(strip=True).lower()
             if post_author == author:
-                post_content = content_tag.get_text(strip=True)
+                post_content = (
+                    content_tag.get_text(strip=True)
+                    if post_content
+                    else "Unable to retrive post content"
+                )
                 timestamp = (
                     timestamp_tag.get_text(strip=True) if timestamp_tag else "Unknown"
                 )
@@ -315,6 +319,7 @@ async def analyze_webpage(
         log.error(f"❌ Error fetching page: {e}")
 
 
+# Generic data extractors
 SITE_DATA_EXTRACTORS: list[ExtractorCallback] = [
     extract_metadata,  # Extract metadata (title, description, keywords)
     extract_names,  # Extract any possible names
@@ -325,9 +330,11 @@ SITE_DATA_EXTRACTORS: list[ExtractorCallback] = [
     extract_file_downloads,  # Extract downloadable files
 ]
 
+# Post and author-specific data extractors
 POST_CONTENT_EXTRACTORS: list[ExtractorCallback] = [
-    extract_posts
-]  # extract posts by an author
+    extract_posts,  # extract posts by an author
+    extract_main_content,  # extract the main content of a page
+]
 
 
 if __name__ == "__main__":

@@ -7,7 +7,6 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 COPY . /app
-RUN rm -rf venv .venv 
 
 # system updates
 RUN apt-get update -y && apt-get upgrade -y && \
