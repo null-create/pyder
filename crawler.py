@@ -67,8 +67,7 @@ class Crawler:
         self.export = export_data  # flag for saving json data
 
         if self.author == "" and self.workflow == DETECTION:
-            log.error("No author set for detection mode!")
-            exit(1)
+            raise ValueError("❌ No author set for detection mode!")
 
     async def get(self, url: str) -> httpx.Response:
         """attempts to run a GET request on a given URL"""
@@ -162,9 +161,7 @@ class Crawler:
                 for post in posts:
                     guess = self.predict_author(post["post_content"])
                     post["author_prediction"] = guess
-                    log.info(
-                        f"[+] {post['author']} = {self.author} likelyhood: {guess}"
-                    )
+                    log.info(f"🕵️‍♀️ {post['author']} = {self.author} likelyhood: {guess}")
 
             extracted_data[self.author] += posts
 
@@ -214,7 +211,7 @@ class Crawler:
         while url_pool and depth <= self.search_depth:
             responses, failures = await self.scrape(url_pool)
             log.info(
-                f"[!] depth {depth}: scraped {len(responses)} pages and failed {len(failures)}"
+                f"📃 depth {depth}: scraped {len(responses)} pages and failed {len(failures)}"
             )
             self.process_responses(responses)
             url_pool = self.find_urls(responses)

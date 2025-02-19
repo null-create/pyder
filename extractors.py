@@ -277,12 +277,12 @@ def search_keywords(soup: BeautifulSoup, keywords: List[str]) -> Dict[str, List[
 
 # used for testing
 async def analyze_webpage(
-    url: URL, keywords: List[str] = None, view_results: bool = False
+    url: URL, author: str, keywords: List[str] = None, view_results: bool = True
 ) -> tuple[Dict[str, List[str]], list]:
     """Fetches a webpage and extracts names and keyword matches."""
     try:
         response = await fetch_html(url)
-        soup = BeautifulSoup(response.text, "html.parser")
+        soup = BeautifulSoup(response.content, "html.parser")
 
         if keywords:
             keyword_results = search_keywords(soup, keywords)
@@ -295,16 +295,9 @@ async def analyze_webpage(
                 else:
                     print("No occurrences found.")
 
-        extracted_posts = extract_posts(soup, url, "CHANGEME")
-        if view_results and len(extracted_posts) > 0:
-            ans = input("View post extraction posts? (y/n): ")
-            if ans.lower() == "y":
-                for i, post in enumerate(extracted_posts):
-                    print(f"{i+1}: {json.dumps(post, indent=2)}")
-
         extracted_data = []
-        for extraction_fn in SITE_DATA_EXTRACTORS:
-            data = extraction_fn(soup, url)
+        for extraction_fn in POST_CONTENT_EXTRACTORS:
+            data = extraction_fn(soup, url, author)
             extracted_data.append(data)
 
         if view_results and len(extracted_data) > 0:
@@ -320,10 +313,9 @@ async def analyze_webpage(
 
 
 # Generic data extractors
-SITE_DATA_EXTRACTORS: list[ExtractorCallback] = [
+METDATA_EXTRACTORS: list[ExtractorCallback] = [
     extract_metadata,  # Extract metadata (title, description, keywords)
     extract_names,  # Extract any possible names
-    extract_main_content,  # Extract main site content
     extract_internal_links,  # Extract internal links
     extract_external_links,  # Extract external links
     extract_social_links,  # Extract social media links
@@ -340,6 +332,7 @@ POST_CONTENT_EXTRACTORS: list[ExtractorCallback] = [
 if __name__ == "__main__":
     starting_data = get_starting_data()
     url = starting_data["urls"][0]
+    author = starting_data["author"]
     keywords = starting_data["keywords"]
 
-    asyncio.run(analyze_webpage(URL(url), [kw.strip() for kw in keywords], True))
+    asyncio.run(analyze_webpage(URL(url), author, [kw.strip() for kw in keywords]))

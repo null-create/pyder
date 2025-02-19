@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from loguru import logger as log
 from collections import Counter
-from typing import Dict, List, Tuple, Type, Union, Any
+from typing import Dict, List, Tuple, Union, Any
 from scipy.sparse import spmatrix
 
 from sklearn.svm import SVC
@@ -33,11 +33,11 @@ class Model:
     Can either be instanted with an already loaded model, or load one from a given file
     """
 
-    def __init__(self, loaded_model: Type = None, model_file: str = None) -> None:
-        self.model: Type = loaded_model
-        self.model_file: str = model_file
-        self.vectorizer: TfidfVectorizer = TfidfVectorizer()
-        self.trained: bool = False
+    def __init__(self, loaded_model: Any = None, model_file: str = None) -> None:
+        self.model = loaded_model
+        self.model_file = model_file
+        self.vectorizer = TfidfVectorizer()
+        self.trained = False
 
         if self.model_file and not self.model:
             self.load_model()
