@@ -71,7 +71,7 @@ class Crawler:
 
     async def get(self, url: str) -> httpx.Response:
         """attempts to run a GET request on a given URL"""
-        return await self.session.get(url, follow_redirects=True, timeout=1.0)
+        return await self.session.get(url, follow_redirects=True, timeout=3.0)
 
     def predict_author(self, text: str) -> ndarray:
         """sends text to the model to predict whether it was written by a specific author"""
@@ -86,7 +86,7 @@ class Crawler:
     def run_callbacks(self, responses: list[Response]) -> None:
         """Run a list of data extraction callbacks over the given list of responses"""
         if len(responses) == 0:
-            return []
+            return
 
         extracted_data = []
         for response in responses:
@@ -146,16 +146,18 @@ class Crawler:
     def process_responses(self, responses: list[Response]) -> None:
         """
         Processes the responses returned from the initial scrape.
-        Runs post extraction method if we're in discovery mode, otherwise attempts to run
-        a preditiction using an instantiated model to try and guess if this post was written
-        by our author
+        Exctacts posts content, and will attempt to run a preditiction using an
+        instantiated model to try and guess if this post was written by our author
+        if the crawler is in detection mode
         """
         if len(responses) == 0:
             return
 
-        extracted_data = {self.author: []}
+        extracted_data = []
         for response in responses:
-            posts = self.extract_posts(BeautifulSoup(response.text), response.url)
+            posts = self.extract_posts(
+                BeautifulSoup(response.text, "html.parser"), response.url
+            )
 
             if self.workflow == DETECTION and self.model:
                 for post in posts:
@@ -163,13 +165,16 @@ class Crawler:
                     post["author_prediction"] = guess
                     log.info(f"🕵️‍♀️ {post['author']} = {self.author} likelyhood: {guess}")
 
-            extracted_data[self.author] += posts
+            extracted_data += posts
 
         if self.export:
-            self.data.export(extracted_data[self.author])
+            self.data.export(extracted_data)
 
     def find_urls(self, responses: List[httpx.Response]) -> List[str]:
         """find valid urls in responses"""
+        if len(responses) == 0:
+            return []
+
         all_unique_urls = set()
         for response in responses:
             sel = Selector(text=response.text, base_url=str(response.url))
@@ -182,7 +187,7 @@ class Crawler:
         if response.url.host in self.url_filters:
             urls_to_follow = self.url_filters[response.url.host].filter(all_unique_urls)
         else:
-            urls_to_follow = all_unique_urls
+            urls_to_follow = list(all_unique_urls)
 
         log.info(
             f"[+] found {len(urls_to_follow)} urls to follow (from total {len(all_unique_urls)})"
@@ -211,7 +216,7 @@ class Crawler:
         while url_pool and depth <= self.search_depth:
             responses, failures = await self.scrape(url_pool)
             log.info(
-                f"📃 depth {depth}: scraped {len(responses)} pages and failed {len(failures)}"
+                f"depth {depth}: scraped {len(responses)} pages and failed {len(failures)}"
             )
             self.process_responses(responses)
             url_pool = self.find_urls(responses)

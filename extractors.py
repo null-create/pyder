@@ -55,9 +55,7 @@ def is_likely_name(text: str) -> bool:
     )
 
 
-def extract_names(
-    soup: BeautifulSoup, url: URL, author_name: str = ""
-) -> Dict[str, List[str]]:
+def extract_names(soup: BeautifulSoup, _: URL, __: str) -> Dict[str, List[str]]:
     """Extracts potential names of people from the webpage content using NER and regex."""
     text_content = " ".join(
         tag.get_text(strip=True) for tag in soup.find_all(["h1", "h2", "h3", "p"])
