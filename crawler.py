@@ -30,12 +30,12 @@ class Crawler:
     async def __aenter__(self):
         self.session = await httpx.AsyncClient(
             timeout=httpx.Timeout(60.0),
-            limits=httpx.Limits(max_connections=5),
             headers={
                 "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36",
                 "accept": "text/html,application/json,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
                 "accept-language": "en-US;en;q=0.9",
             },
+            follow_redirects=True,
         ).__aenter__()
         return self
 
@@ -176,6 +176,7 @@ class Crawler:
             return []
 
         all_unique_urls = set()
+        urls_to_follow = []
         for response in responses:
             sel = Selector(text=response.text, base_url=str(response.url))
             _urls_in_response = set(
@@ -185,9 +186,11 @@ class Crawler:
             all_unique_urls |= _urls_in_response
 
         if response.url.host in self.url_filters:
-            urls_to_follow = self.url_filters[response.url.host].filter(all_unique_urls)
+            urls_to_follow += self.url_filters[response.url.host].filter(
+                all_unique_urls
+            )
         else:
-            urls_to_follow = list(all_unique_urls)
+            urls_to_follow += list(all_unique_urls)
 
         log.info(
             f"[+] found {len(urls_to_follow)} urls to follow (from total {len(all_unique_urls)})"

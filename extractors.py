@@ -1,3 +1,7 @@
+"""
+Generic data extraction utilities. Primariliy for static pages
+"""
+
 import re
 import json
 import asyncio
@@ -19,10 +23,6 @@ from data import get_starting_data
 nltk.download("punkt_tab")
 nltk.download("maxent_ne_chunker_tab")
 nltk.download("averaged_perceptron_tagger_eng")
-
-
-# file for custom call backs defined in EXTRACTION RULES used by the
-# crawler class to handle various discoveries and scenaries
 
 
 # Define type alias for extraction function signatures
@@ -273,6 +273,9 @@ def search_keywords(soup: BeautifulSoup, keywords: List[str]) -> Dict[str, List[
     return found_keywords
 
 
+### Testing Utilities
+
+
 # used for testing
 async def analyze_webpage(
     url: URL, author: str, keywords: List[str] = None, view_results: bool = True
@@ -280,7 +283,7 @@ async def analyze_webpage(
     """Fetches a webpage and extracts names and keyword matches."""
     try:
         response = await fetch_html(url)
-        soup = BeautifulSoup(response.content, "html.parser")
+        soup = BeautifulSoup(response.text, "html.parser")
 
         if keywords:
             keyword_results = search_keywords(soup, keywords)
@@ -296,7 +299,10 @@ async def analyze_webpage(
         extracted_data = []
         for extraction_fn in POST_CONTENT_EXTRACTORS:
             data = extraction_fn(soup, url, author)
-            extracted_data.append(data)
+            if isinstance(data, list):
+                extracted_data += data
+            elif isinstance(data, dict):
+                extracted_data.append(data)
 
         if view_results and len(extracted_data) > 0:
             ans = input("View data extraction results? (y/n): ")
@@ -311,7 +317,7 @@ async def analyze_webpage(
 
 
 # Generic data extractors
-METDATA_EXTRACTORS: list[ExtractorCallback] = [
+METADATA_EXTRACTORS: list[ExtractorCallback] = [
     extract_metadata,  # Extract metadata (title, description, keywords)
     extract_names,  # Extract any possible names
     extract_internal_links,  # Extract internal links
@@ -329,8 +335,5 @@ POST_CONTENT_EXTRACTORS: list[ExtractorCallback] = [
 
 if __name__ == "__main__":
     starting_data = get_starting_data()
-    url = starting_data["urls"][0]
-    author = starting_data["author"]
-    keywords = starting_data["keywords"]
-
-    asyncio.run(analyze_webpage(URL(url), author, [kw.strip() for kw in keywords]))
+    author_home_url = starting_data["home"]
+    author_handle = starting_data["handle"]

@@ -1,4 +1,3 @@
-import os
 import posixpath
 from typing import List, Pattern, Dict
 from urllib.parse import urlparse

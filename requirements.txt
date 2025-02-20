@@ -13,3 +13,6 @@ joblib
 keras
 keras_hub
 tensorflow
+twint
+playwright
+atproto
