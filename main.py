@@ -6,7 +6,7 @@ from model import Model
 from urls import generate_url_filters
 from data import DataHandler, get_keywords
 from crawler import Crawler, DETECTION, DISCOVERY, get_seed_urls
-from extractors import METADATA_EXTRACTORS
+from scrape import METADATA_EXTRACTORS
 
 load_dotenv()
 

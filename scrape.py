@@ -3,7 +3,6 @@ Generic data extraction utilities. Primariliy for static pages
 """
 
 import re
-import json
 import asyncio
 from urllib.parse import urljoin, urlparse
 from typing import Callable, Dict, List, Any
@@ -277,8 +276,8 @@ def search_keywords(soup: BeautifulSoup, keywords: List[str]) -> Dict[str, List[
 
 
 # used for testing
-async def analyze_webpage(
-    url: URL, author: str, keywords: List[str] = None, view_results: bool = True
+async def scrape_page(
+    url: URL, author: str, keywords: List[str] = None
 ) -> tuple[Dict[str, List[str]], list]:
     """Fetches a webpage and extracts names and keyword matches."""
     try:
@@ -297,18 +296,19 @@ async def analyze_webpage(
                     print("No occurrences found.")
 
         extracted_data = []
+        for extraction_fn in METADATA_EXTRACTORS:
+            data = extraction_fn(soup, url)
+            if isinstance(data, list):
+                extracted_data += data
+            elif isinstance(data, dict):
+                extracted_data.append(data)
+
         for extraction_fn in POST_CONTENT_EXTRACTORS:
             data = extraction_fn(soup, url, author)
             if isinstance(data, list):
                 extracted_data += data
             elif isinstance(data, dict):
                 extracted_data.append(data)
-
-        if view_results and len(extracted_data) > 0:
-            ans = input("View data extraction results? (y/n): ")
-            if ans.lower() == "y":
-                for i, item in enumerate(extracted_data):
-                    print(f"{i+1}: {json.dumps(item, indent=2)}\n")
 
         return (keyword_results, extracted_data)
 
@@ -335,5 +335,8 @@ POST_CONTENT_EXTRACTORS: list[ExtractorCallback] = [
 
 if __name__ == "__main__":
     starting_data = get_starting_data()
-    author_home_url = starting_data["home"]
-    author_handle = starting_data["handle"]
+    url = starting_data["urls"][0]
+    author = starting_data["author"]
+    keywords = starting_data["keywords"]
+
+    asyncio.run(scrape_page(URL(url), author, keywords))

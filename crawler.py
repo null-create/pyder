@@ -1,22 +1,22 @@
 import os
-import re
 import asyncio
 from urllib.parse import urljoin
 from typing import Dict, List, Tuple, Any, Optional
 
 import httpx
-from httpx import Response, URL
+from httpx import Response
 from parsel import Selector
 from bs4 import BeautifulSoup
 from numpy import ndarray
 from loguru import logger as log
 from dotenv import load_dotenv
-
+from playwright.async_api import async_playwright, Browser, Page
 from keras.api.preprocessing.sequence import pad_sequences
 
-from extractors import POST_CONTENT_EXTRACTORS, ExtractorCallback
+from twitter import TIMEOUT
 from model import Model, load_trained_model
 from urls import UrlFilter, generate_url_filters
+from scrape import METADATA_EXTRACTORS, POST_CONTENT_EXTRACTORS, ExtractorCallback
 from data import DataHandler, get_starting_data, get_model_and_tokenizer_filenames
 
 load_dotenv()
@@ -24,6 +24,116 @@ load_dotenv()
 # Crawler modes
 DISCOVERY = "data_collection"
 DETECTION = "author_detection"
+
+
+class TwitterCrawler:
+    async def __aenter__(self):
+        self.playwright = await async_playwright().start()
+        self.browser = await self.playwright.chromium.launch(headless=True)
+        self.page = await self.browser.new_page()
+        return self
+
+    async def __aexit__(self, *args, **kwargs):
+        await self._close_browser()
+
+    def __init__(
+        self,
+        mode: str,
+        tweet_urls: list[str],
+        data_handler: DataHandler,
+        model: Optional[Any] = None,
+        tokenizer: Optional[Any] = None,
+    ) -> None:
+        self.urls = tweet_urls
+        self.data_handler = data_handler
+        self.model = model
+        self.tokenizer = tokenizer
+        self.browser: Optional[Browser] = None
+        self.page: Optional[Page] = None
+
+        if mode not in [DISCOVERY, DETECTION]:
+            raise ValueError(
+                f"❌ Incorrect mode. Must be one of: {DISCOVERY}, {DETECTION}"
+            )
+        self.mode = mode
+
+    async def _initialize_browser(self) -> None:
+        """Initializes the Playwright browser if not already started."""
+        if not self.browser:
+            self.playwright = await async_playwright().start()
+            self.browser = await self.playwright.chromium.launch(headless=True)
+            self.page = await self.browser.new_page()
+
+    async def _close_browser(self) -> None:
+        """Closes the Playwright browser instance."""
+        if self.browser:
+            await self.browser.close()
+            await self.playwright.stop()
+            self.browser = None
+            self.page = None
+
+    async def scrape_tweets(self) -> None:
+        """Scrapes tweets using Playwright and captures relevant data."""
+
+        _xhr_calls = []
+
+        def intercept_response(response):
+            """Captures all XHR requests made by the page."""
+            if response.request.resource_type == "xhr":
+                _xhr_calls.append(response)
+
+        self.page.on("response", intercept_response)
+
+        for url in self.urls:
+            await self.page.goto(url)
+            await self.page.wait_for_selector("[data-testid='tweet']", timeout=TIMEOUT)
+
+            # Extract tweet background requests:
+            tweet_calls = [f for f in _xhr_calls if "TweetResultByRestId" in f.url]
+            for xhr in tweet_calls:
+                data = await xhr.json()
+                tweet_data = (
+                    data.get("data", {}).get("tweetResult", {}).get("result", {})
+                )
+                if tweet_data:
+                    post = {
+                        "author": tweet_data.get("core", {})
+                        .get("user_results", {})
+                        .get("result", {})
+                        .get("legacy", {})
+                        .get("screen_name", ""),
+                        "post_content": tweet_data.get("legacy", {}).get(
+                            "full_text", ""
+                        ),
+                        "timestamp": tweet_data.get("legacy", {}).get("created_at", ""),
+                        "thread_url": url,
+                    }
+                    if self.mode == DISCOVERY:
+                        self.data_handler.export(post)
+                    elif self.mode == DETECTION:
+                        pass
+
+    async def close(self) -> None:
+        await self._close_browser()
+
+
+async def run_tweet_crawler(workflow: str, tweet_urls: list[str], author: str) -> None:
+    model, tokenizer = None, None
+    if workflow == DETECTION:
+        model_file, tokenizer_file = get_model_and_tokenizer_filenames()
+        model, tokenizer = load_trained_model(model_file, tokenizer_file)
+
+    async with TwitterCrawler(
+        workflow,
+        tweet_urls,
+        DataHandler(
+            output_file_name=f"{author}-tweets",
+            output_format="csv" if workflow == DISCOVERY else "json",
+        ),
+        model,
+        tokenizer,
+    ) as tc:
+        await tc.scrape_tweets()
 
 
 class Crawler:
@@ -58,15 +168,15 @@ class Crawler:
         self.url_filters = filters  # url filter class
         self.data = data_handler  # data handler class
         self.workflow = workflow  # workflow type
-        self.author = author or ""  # name of author to scrape
+        self.author = author  # name of author to scrape
         self.model = model  # pre-trained model, if applicable
         self.tokenizer = tokenizer  # ml tokenizer
         self.keywords = keywords or []  # list of keywords to search for
-        self.callbacks = callbacks or []  # data extractor callbacks
+        self.callbacks = callbacks or []  # data scraper callbacks
         self.search_depth = search_depth or 10  # url pool iterations
         self.export = export_data  # flag for saving json data
 
-        if self.author == "" and self.workflow == DETECTION:
+        if not self.author and self.workflow == DETECTION:
             raise ValueError("❌ No author set for detection mode!")
 
     async def get(self, url: str) -> httpx.Response:
@@ -83,89 +193,22 @@ class Crawler:
         else:
             return self.model.predict([text])[0]
 
-    def run_callbacks(self, responses: list[Response]) -> None:
-        """Run a list of data extraction callbacks over the given list of responses"""
+    def process_responses(self, responses: list[Response]) -> None:
+        """Run a list of generic scraper callbacks over the given list of responses"""
         if len(responses) == 0:
             return
 
         extracted_data = []
         for response in responses:
-            for callback in self.callbacks:
-                data = callback(
+            for callback_fn in self.callbacks:
+                data = callback_fn(
                     BeautifulSoup(response.text, "html.parser"),
-                    response.url,
-                    self.author,
+                    str(response.url),
                 )
                 if isinstance(data, list):
                     extracted_data += data
                 elif isinstance(data, dict):
                     extracted_data.append(data)
-
-        if self.export:
-            self.data.export(extracted_data)
-
-    def extract_posts(self, soup: BeautifulSoup, url: URL) -> list[Dict[str, Any]]:
-        posts = []
-        for post in soup.find_all(
-            "div", class_=re.compile(r"post|comment|message", re.IGNORECASE)
-        ):
-            author_tag = post.find(
-                "a", class_=re.compile(r"user|username|author", re.IGNORECASE)
-            )
-            content_tag = post.find(
-                "div", class_=re.compile(r"content|text|body", re.IGNORECASE)
-            )
-            timestamp_tag = post.find(
-                "span", class_=re.compile(r"time|date", re.IGNORECASE)
-            )
-
-            if author_tag and content_tag:
-                post_author = author_tag.get_text(strip=True).lower()
-                if post_author == self.author:
-                    post_content = (
-                        content_tag.get_text(strip=True)
-                        if post_content
-                        else "Unable to retrive post content"
-                    )
-                    timestamp = (
-                        timestamp_tag.get_text(strip=True)
-                        if timestamp_tag
-                        else "Unknown"
-                    )
-                    posts.append(
-                        {
-                            "author": post_author,
-                            "post_content": post_content,
-                            "timestamp": timestamp,
-                            "thread_url": str(url),
-                        }
-                    )
-
-        return posts
-
-    def process_responses(self, responses: list[Response]) -> None:
-        """
-        Processes the responses returned from the initial scrape.
-        Exctacts posts content, and will attempt to run a preditiction using an
-        instantiated model to try and guess if this post was written by our author
-        if the crawler is in detection mode
-        """
-        if len(responses) == 0:
-            return
-
-        extracted_data = []
-        for response in responses:
-            posts = self.extract_posts(
-                BeautifulSoup(response.text, "html.parser"), response.url
-            )
-
-            if self.workflow == DETECTION and self.model:
-                for post in posts:
-                    guess = self.predict_author(post["post_content"])
-                    post["author_prediction"] = guess
-                    log.info(f"🕵️‍♀️ {post['author']} = {self.author} likelyhood: {guess}")
-
-            extracted_data += posts
 
         if self.export:
             self.data.export(extracted_data)
@@ -249,7 +292,7 @@ async def run_crawler(
         model=model,
         tokenizer=tokenizer,
         keywords=keywords,
-        callbacks=POST_CONTENT_EXTRACTORS,
+        callbacks=METADATA_EXTRACTORS,
         export_data=True,
     ) as crawler:
         await crawler.run(seed_urls)
@@ -259,7 +302,6 @@ if __name__ == "__main__":
     workflow = DISCOVERY
     starting_data = get_starting_data()
     author = starting_data["author"]
-    keywords = starting_data["keywords"]
     seed_urls = starting_data["urls"]
 
-    asyncio.run(run_crawler(seed_urls, workflow, author, keywords))
+    asyncio.run(run_tweet_crawler(workflow, seed_urls, author))
