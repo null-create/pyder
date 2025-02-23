@@ -45,13 +45,11 @@ class TwitterCrawler:
         self,
         mode: str,
         tweet_urls: list[str],
-        url_filter: UrlFilter,
         data_handler: DataHandler,
         model: Model = None,
         tokenizer: Optional[Any] = None,
     ) -> None:
         self.urls = tweet_urls
-        self.url_filter = url_filter
         self.data_handler = data_handler
         self.model = model
         self.tokenizer = tokenizer
@@ -343,5 +341,3 @@ if __name__ == "__main__":
     starting_data = get_starting_data()
     author = starting_data["author"]
     seed_urls = starting_data["urls"]
-
-    asyncio.run(scrape_tweet_urls(author))
