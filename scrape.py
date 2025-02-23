@@ -30,7 +30,6 @@ ExtractorCallback = Callable[
 ]
 
 
-# used for testing
 async def fetch_html(url: URL) -> httpx.Response:
     """Fetches the HTML content of the given URL using httpx."""
     async with httpx.AsyncClient() as client:

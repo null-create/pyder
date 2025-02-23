@@ -7,3 +7,4 @@ scraped-data.*
 __pycache__
 *.txt
 *.json
+*.csv

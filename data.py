@@ -150,12 +150,12 @@ class DataHandler:
     def export(self, data: Dict[str, Any] | list[Dict[str, Any]]) -> None:
         """Saves extracted data to a file in the specified format."""
         if self.output_format == "json":
-            self._save_json(data)
+            self.save_json(data)
         elif self.output_format == "csv":
-            self._save_csv(data)
+            self.save_csv(data)
 
-    def _save_json(self, data: Dict[str, Any] | list[Dict[str, Any]]) -> None:
-        """Appends extracted data to a JSON file. Used only in detection mode."""
+    def save_json(self, data: Dict[str, Any] | list[Dict[str, Any]]) -> None:
+        """Appends extracted data to a JSON file"""
         try:
             if self.compress:
                 with gzip.open(
@@ -169,8 +169,8 @@ class DataHandler:
         except Exception as e:
             log.error(f"❌ Error saving JSON: {e}")
 
-    def _save_csv(self, data: Dict[str, Any] | list[Dict[str, Any]]) -> None:
-        """Appends extracted data to a CSV file. Used only during discovery mode."""
+    def save_csv(self, data: list[Dict[str, Any]]) -> None:
+        """Appends extracted data to a CSV file"""
         try:
             file_exists = os.path.isfile(self.output_file)
 

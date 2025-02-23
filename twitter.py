@@ -1,7 +1,6 @@
 import re
 import json
-import asyncio
-from typing import Dict, List, Any, Callable
+from typing import List
 
 import twint
 from httpx import URL
@@ -9,7 +8,6 @@ from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright
 from playwright.async_api import async_playwright
 
-from data import DataHandler
 
 ###############################################
 #
@@ -67,7 +65,9 @@ def scrape_tweet(url: str) -> dict:
         page.wait_for_selector("[data-testid='tweet']", timeout=TIMEOUT)
 
         # find all tweet background requests:
-        tweet_calls = [f for f in _xhr_calls if "TweetResultByRestId" in f.url]
+        tweet_calls = [
+            f for f in _xhr_calls if "TweetResultByRestId" or "TweetDetail" in f.url
+        ]
         for xhr in tweet_calls:
             data = xhr.json()
             return data["data"]["tweetResult"]["result"]

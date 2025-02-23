@@ -1,6 +1,7 @@
 import os
+import json
 import asyncio
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit
 from typing import Dict, List, Tuple, Any, Optional
 
 import httpx
@@ -16,7 +17,11 @@ from keras.api.preprocessing.sequence import pad_sequences
 from twitter import TIMEOUT
 from model import Model, load_trained_model
 from urls import UrlFilter, generate_url_filters
-from scrape import METADATA_EXTRACTORS, POST_CONTENT_EXTRACTORS, ExtractorCallback
+from scrape import (
+    METADATA_EXTRACTORS,
+    POST_CONTENT_EXTRACTORS,
+    ExtractorCallback,
+)
 from data import DataHandler, get_starting_data, get_model_and_tokenizer_filenames
 
 load_dotenv()
@@ -40,11 +45,13 @@ class TwitterCrawler:
         self,
         mode: str,
         tweet_urls: list[str],
+        url_filter: UrlFilter,
         data_handler: DataHandler,
-        model: Optional[Any] = None,
+        model: Model = None,
         tokenizer: Optional[Any] = None,
     ) -> None:
         self.urls = tweet_urls
+        self.url_filter = url_filter
         self.data_handler = data_handler
         self.model = model
         self.tokenizer = tokenizer
@@ -55,6 +62,7 @@ class TwitterCrawler:
             raise ValueError(
                 f"❌ Incorrect mode. Must be one of: {DISCOVERY}, {DETECTION}"
             )
+
         self.mode = mode
 
     async def _initialize_browser(self) -> None:
@@ -72,6 +80,30 @@ class TwitterCrawler:
             self.browser = None
             self.page = None
 
+    @staticmethod
+    def clean_url(raw_url: str) -> str:
+        split_url = urlsplit(raw_url)
+        return split_url.scheme + "://" + split_url.netloc + split_url.path
+
+    @staticmethod
+    def get_urls(page_content: str, base_url: str) -> list[str]:
+        """parse urls from static page content"""
+        sel = Selector(text=page_content, base_url=base_url)
+        urls_in_page_content = set(
+            urljoin(url, url.strip()) for url in sel.xpath("//a/@href").getall()
+        )
+        return list(urls_in_page_content)
+
+    def predict_author(self, text: str) -> ndarray:
+        """sends text to the model to predict whether it was written by a specific author"""
+        if self.tokenizer:
+            sequence = self.tokenizer.texts_to_sequences([text])
+            padded_sequence = pad_sequences(sequence, maxlen=100)
+            return self.model.predict(padded_sequence)[0]
+
+        else:
+            return self.model.predict([text])[0]
+
     async def scrape_tweets(self) -> None:
         """Scrapes tweets using Playwright and captures relevant data."""
 
@@ -84,12 +116,18 @@ class TwitterCrawler:
 
         self.page.on("response", intercept_response)
 
+        log.info(f"attempting to scrape {len(self.urls)} tweets...")
+
+        total_scraped = 0
         for url in self.urls:
+            log.info(f"scraping: {url}...")
             await self.page.goto(url)
             await self.page.wait_for_selector("[data-testid='tweet']", timeout=TIMEOUT)
 
             # Extract tweet background requests:
-            tweet_calls = [f for f in _xhr_calls if "TweetResultByRestId" in f.url]
+            tweet_calls = [
+                f for f in _xhr_calls if "TweetResultByRestId" or "TweetDetail" in f.url
+            ]
             for xhr in tweet_calls:
                 data = await xhr.json()
                 tweet_data = (
@@ -109,9 +147,12 @@ class TwitterCrawler:
                         "thread_url": url,
                     }
                     if self.mode == DISCOVERY:
-                        self.data_handler.export(post)
+                        self.data_handler.export([post])
+                        total_scraped += 1
                     elif self.mode == DETECTION:
-                        pass
+                        log.warn("not implemented yet")
+
+        log.info(f"scraped {total_scraped} tweets")
 
     async def close(self) -> None:
         await self._close_browser()
@@ -124,14 +165,14 @@ async def run_tweet_crawler(workflow: str, tweet_urls: list[str], author: str) -
         model, tokenizer = load_trained_model(model_file, tokenizer_file)
 
     async with TwitterCrawler(
-        workflow,
-        tweet_urls,
-        DataHandler(
-            output_file_name=f"{author}-tweets",
-            output_format="csv" if workflow == DISCOVERY else "json",
+        mode=workflow,
+        url_filter=UrlFilter(domain="https://x.com", follow_paths=[f"/{author}"]),
+        data_handler=DataHandler(
+            output_file_name=f"{author}-tweets", output_format="csv"
         ),
-        model,
-        tokenizer,
+        tweet_urls=tweet_urls,
+        model=model,
+        tokenizer=tokenizer,
     ) as tc:
         await tc.scrape_tweets()
 
@@ -172,7 +213,7 @@ class Crawler:
         self.model = model  # pre-trained model, if applicable
         self.tokenizer = tokenizer  # ml tokenizer
         self.keywords = keywords or []  # list of keywords to search for
-        self.callbacks = callbacks or []  # data scraper callbacks
+        self.callbacks = callbacks or []  # list data scraper callbacks
         self.search_depth = search_depth or 10  # url pool iterations
         self.export = export_data  # flag for saving json data
 
@@ -293,7 +334,6 @@ async def run_crawler(
         tokenizer=tokenizer,
         keywords=keywords,
         callbacks=METADATA_EXTRACTORS,
-        export_data=True,
     ) as crawler:
         await crawler.run(seed_urls)
 
@@ -304,4 +344,4 @@ if __name__ == "__main__":
     author = starting_data["author"]
     seed_urls = starting_data["urls"]
 
-    asyncio.run(run_tweet_crawler(workflow, seed_urls, author))
+    asyncio.run(scrape_tweet_urls(author))
