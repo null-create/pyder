@@ -14,7 +14,6 @@ from dotenv import load_dotenv
 from playwright.async_api import async_playwright, Browser, Page
 from keras.api.preprocessing.sequence import pad_sequences
 
-from twitter import TIMEOUT
 from model import Model, load_trained_model
 from urls import UrlFilter, generate_url_filters
 from scrape import (
@@ -26,9 +25,10 @@ from data import DataHandler, get_starting_data, get_model_and_tokenizer_filenam
 
 load_dotenv()
 
-# Crawler modes
+# Crawler modes and timeouts
 DISCOVERY = "data_collection"
 DETECTION = "author_detection"
+TIMEOUT = 3000000  # microseconds
 
 
 class TwitterCrawler:
@@ -164,7 +164,6 @@ async def run_tweet_crawler(workflow: str, tweet_urls: list[str], author: str) -
 
     async with TwitterCrawler(
         mode=workflow,
-        url_filter=UrlFilter(domain="https://x.com", follow_paths=[f"/{author}"]),
         data_handler=DataHandler(
             output_file_name=f"{author}-tweets", output_format="csv"
         ),
