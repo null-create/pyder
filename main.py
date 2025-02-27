@@ -4,9 +4,9 @@ from dotenv import load_dotenv
 
 from model import Model
 from urls import generate_url_filters
-from data import DataHandler, get_keywords
-from crawlers import Crawler, DETECTION, DISCOVERY, get_seed_urls
-from scrape import METADATA_EXTRACTORS
+from data import DataHandler, get_starting_data
+from crawlers import Crawler, DETECTION, DISCOVERY
+from scrape import DATA_EXTRACTORS
 
 load_dotenv()
 
@@ -25,11 +25,11 @@ async def main():
 
             model, tokenizer = load_trained_model("model.pkl", "tokenizer.pkl")
 
-    seed_urls = get_seed_urls()
+    starting_data = get_starting_data()
 
     # Initialize DataHandler & Crawler
     async with Crawler(
-        filters=generate_url_filters(seed_urls),
+        filters=generate_url_filters(starting_data["urls"]),
         data_handler=DataHandler(
             output_file_name="scraped-data",
             output_format="csv" if workflow == DISCOVERY else "json",
@@ -37,10 +37,10 @@ async def main():
         workflow=workflow,
         model=model,
         tokenizer=tokenizer,
-        callbacks=METADATA_EXTRACTORS,
-        keywords=get_keywords(),
+        callbacks=DATA_EXTRACTORS,
+        keywords=starting_data["keywords"],
     ) as crawler:
-        await crawler.run(seed_urls)
+        await crawler.run(starting_data["urls"])
 
 
 if __name__ == "__main__":

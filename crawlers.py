@@ -16,11 +16,7 @@ from keras.api.preprocessing.sequence import pad_sequences
 
 from model import Model, load_trained_model
 from urls import UrlFilter, generate_url_filters
-from scrape import (
-    METADATA_EXTRACTORS,
-    POST_CONTENT_EXTRACTORS,
-    ExtractorCallback,
-)
+from scrape import DATA_EXTRACTORS, ExtractorCallback
 from data import DataHandler, get_starting_data, get_model_and_tokenizer_filenames
 
 load_dotenv()
@@ -330,7 +326,7 @@ async def run_crawler(
         model=model,
         tokenizer=tokenizer,
         keywords=keywords,
-        callbacks=METADATA_EXTRACTORS,
+        callbacks=DATA_EXTRACTORS,
     ) as crawler:
         await crawler.run(seed_urls)
 
