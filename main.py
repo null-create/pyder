@@ -2,11 +2,10 @@ import asyncio
 
 from dotenv import load_dotenv
 
-from model import Model
 from urls import generate_url_filters
 from data import DataHandler, get_starting_data
 from crawlers import Crawler, DETECTION, DISCOVERY
-from scrape import DATA_EXTRACTORS
+from scrape import DATA_EXTRACTORS, WIKI_EXTRACTORS, POST_CONTENT_EXTRACTORS
 
 load_dotenv()
 
@@ -25,11 +24,11 @@ async def main():
 
             model, tokenizer = load_trained_model("model.pkl", "tokenizer.pkl")
 
-    starting_data = get_starting_data()
+    seed_data = get_starting_data()
 
     # Initialize DataHandler & Crawler
     async with Crawler(
-        filters=generate_url_filters(starting_data["urls"]),
+        filters=generate_url_filters(seed_data["urls"]),
         data_handler=DataHandler(
             output_file_name="scraped-data",
             output_format="csv" if workflow == DISCOVERY else "json",
@@ -38,9 +37,9 @@ async def main():
         model=model,
         tokenizer=tokenizer,
         callbacks=DATA_EXTRACTORS,
-        keywords=starting_data["keywords"],
+        keywords=seed_data["keywords"],
     ) as crawler:
-        await crawler.run(starting_data["urls"])
+        await crawler.run(seed_data["urls"])
 
 
 if __name__ == "__main__":
