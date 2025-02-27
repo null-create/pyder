@@ -59,13 +59,6 @@ class TwitterCrawler:
 
         self.mode = mode
 
-    async def _initialize_browser(self) -> None:
-        """Initializes the Playwright browser if not already started."""
-        if not self.browser:
-            self.playwright = await async_playwright().start()
-            self.browser = await self.playwright.chromium.launch(headless=True)
-            self.page = await self.browser.new_page()
-
     async def _close_browser(self) -> None:
         """Closes the Playwright browser instance."""
         if self.browser:

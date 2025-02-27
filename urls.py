@@ -27,13 +27,15 @@ class UrlFilter:
             f"filter created for domain {self.subdomain}.{self.domain} with follow rules {follow_paths}"
         )
 
-    def is_valid_ext(self, url: str) -> bool:
+    @staticmethod
+    def is_valid_ext(url: str) -> bool:
         """ignore non-crawlable documents"""
         return (
             posixpath.splitext(urlparse(url).path)[1].lower() not in IGNORED_EXTENSIONS
         )
 
-    def is_valid_scheme(self, url: str) -> bool:
+    @staticmethod
+    def is_valid_scheme(url: str) -> bool:
         """ignore non http/s links"""
         return urlparse(url).scheme in ["https", "http"]
 
@@ -46,6 +48,7 @@ class UrlFilter:
         )
 
     def is_related(self, url: str) -> bool:
+        """whether the domains are related"""
         domain = get_domain(url)
         return self.domain == domain
 
@@ -65,7 +68,7 @@ class UrlFilter:
 
     def filter(self, urls: List[str]) -> List[str]:
         """filter list of urls"""
-        found = []
+        filtered_urls = []
         for url in urls:
             if not self.is_valid_scheme(url):
                 log.debug(f"drop ignored scheme {url}")
@@ -83,8 +86,8 @@ class UrlFilter:
                 log.debug(f"drop duplicate {url}")
                 continue
             self.seen.add(canonicalize_url(url))
-            found.append(url)
-        return found
+            filtered_urls.append(url)
+        return filtered_urls
 
 
 def generate_url_filters(urls: List[str], venture: bool = True) -> Dict[str, UrlFilter]:
