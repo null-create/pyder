@@ -317,14 +317,14 @@ async def scrape_page(
                     print("No occurrences found.")
 
         extracted_data = []
-        for extraction_fn in DATA_EXTRACTORS:
+        for extraction_fn in META_DATA_EXTRACTORS:
             data = extraction_fn(soup, url)
             if isinstance(data, list):
                 extracted_data += data
             elif isinstance(data, dict):
                 extracted_data.append(data)
 
-        for extraction_fn in POST_CONTENT_EXTRACTORS:
+        for extraction_fn in CONTENT_EXTRACTORS:
             data = extraction_fn(soup, url, author)
             if isinstance(data, list):
                 extracted_data += data
@@ -338,7 +338,7 @@ async def scrape_page(
 
 
 # Generic data extractors
-DATA_EXTRACTORS: list[ExtractorCallback] = [
+META_DATA_EXTRACTORS: list[ExtractorCallback] = [
     extract_metadata,  # Extract metadata (title, description, keywords)
     extract_names,  # Extract any possible names
     extract_internal_links,  # Extract internal links
@@ -354,7 +354,7 @@ WIKI_EXTRACTORS: list[ExtractorCallback] = [
 ]
 
 # Post and author-specific data extractors
-POST_CONTENT_EXTRACTORS: list[ExtractorCallback] = [
+CONTENT_EXTRACTORS: list[ExtractorCallback] = [
     extract_posts,  # extract posts by an author
     extract_main_content,  # extract the main content of a page
 ]

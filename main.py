@@ -2,10 +2,11 @@ import asyncio
 
 from dotenv import load_dotenv
 
+from model import load_trained_model
 from urls import generate_url_filters
 from data import DataHandler, get_starting_data
-from crawlers import Crawler, DETECTION, DISCOVERY
-from scrape import DATA_EXTRACTORS, WIKI_EXTRACTORS, POST_CONTENT_EXTRACTORS
+from crawlers import Crawler, ANALYSIS, DISCOVERY
+from scrape import META_DATA_EXTRACTORS, WIKI_EXTRACTORS, CONTENT_EXTRACTORS
 
 load_dotenv()
 
@@ -18,10 +19,8 @@ async def main():
 
     # Load trained model for author detection (if applicable)
     model, tokenizer = None, None
-    if workflow == DETECTION:
+    if workflow == ANALYSIS:
         if workflow == "author_detection":
-            from model import load_trained_model
-
             model, tokenizer = load_trained_model("model.pkl", "tokenizer.pkl")
 
     seed_data = get_starting_data()
@@ -36,7 +35,7 @@ async def main():
         workflow=workflow,
         model=model,
         tokenizer=tokenizer,
-        callbacks=DATA_EXTRACTORS,
+        callbacks=META_DATA_EXTRACTORS,
         keywords=seed_data["keywords"],
     ) as crawler:
         await crawler.run(seed_data["urls"])

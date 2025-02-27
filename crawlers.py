@@ -16,14 +16,14 @@ from keras.api.preprocessing.sequence import pad_sequences
 
 from model import Model, load_trained_model
 from urls import UrlFilter, generate_url_filters
-from scrape import DATA_EXTRACTORS, ExtractorCallback
+from scrape import META_DATA_EXTRACTORS, ExtractorCallback
 from data import DataHandler, get_starting_data, get_model_and_tokenizer_filenames
 
 load_dotenv()
 
 # Crawler modes and timeouts
-DISCOVERY = "data_collection"
-DETECTION = "author_detection"
+ANALYSIS = "text analysis"
+DISCOVERY = "data collection"
 TIMEOUT = 3000000  # microseconds
 
 
@@ -52,9 +52,9 @@ class TwitterCrawler:
         self.browser: Optional[Browser] = None
         self.page: Optional[Page] = None
 
-        if mode not in [DISCOVERY, DETECTION]:
+        if mode not in [DISCOVERY, ANALYSIS]:
             raise ValueError(
-                f"❌ Incorrect mode. Must be one of: {DISCOVERY}, {DETECTION}"
+                f"❌ Incorrect mode. Must be one of: {DISCOVERY}, {ANALYSIS}"
             )
 
         self.mode = mode
@@ -143,7 +143,7 @@ class TwitterCrawler:
                     if self.mode == DISCOVERY:
                         self.data_handler.export([post])
                         total_scraped += 1
-                    elif self.mode == DETECTION:
+                    elif self.mode == ANALYSIS:
                         log.warn("not implemented yet")
 
         log.info(f"scraped {total_scraped} tweets")
@@ -154,7 +154,7 @@ class TwitterCrawler:
 
 async def run_tweet_crawler(workflow: str, tweet_urls: list[str], author: str) -> None:
     model, tokenizer = None, None
-    if workflow == DETECTION:
+    if workflow == ANALYSIS:
         model_file, tokenizer_file = get_model_and_tokenizer_filenames()
         model, tokenizer = load_trained_model(model_file, tokenizer_file)
 
@@ -210,7 +210,7 @@ class Crawler:
         self.search_depth = search_depth or 10  # url pool iterations
         self.export = export_data  # flag for saving json data
 
-        if not self.author and self.workflow == DETECTION:
+        if not self.author and self.workflow == ANALYSIS:
             raise ValueError("❌ No author set for detection mode!")
 
     async def get(self, url: str) -> httpx.Response:
@@ -311,7 +311,7 @@ async def run_crawler(
     model: Model = None,
     tokenizer: Optional[Any] = None,
 ) -> None:
-    if workflow == DETECTION:
+    if workflow == ANALYSIS:
         model_file, tokenizer_file = get_model_and_tokenizer_filenames()
         model, tokenizer = load_trained_model(model_file, tokenizer_file)
 
@@ -326,7 +326,7 @@ async def run_crawler(
         model=model,
         tokenizer=tokenizer,
         keywords=keywords,
-        callbacks=DATA_EXTRACTORS,
+        callbacks=META_DATA_EXTRACTORS,
     ) as crawler:
         await crawler.run(seed_urls)
 
