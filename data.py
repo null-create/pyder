@@ -3,10 +3,9 @@ import re
 import csv
 import json
 import gzip
-from typing import Dict, Tuple, Any
+from typing import Dict, Any
 
 import numpy as np
-import pandas as pd
 from loguru import logger as log
 
 
@@ -49,6 +48,17 @@ def get_starting_data() -> dict:
     """
     Opens and returns the contents of seed-data.json file.
     This file is used for the web crawler's discovery mode.
+
+    Expects something like:
+    ```
+    {
+        "author": "sepiatune",
+        "handle": "sepiatune",
+        "home": "https://x.com/sepiatune",
+        "urls": ["https://x.com/sepiatune/status/1828124393245172094"],
+        "keywords": ["trump", "president", "executive", "order", "DOGE"]
+    }
+    ```
     """
     file = "seed-data.json"
     if not os.path.exists(file):

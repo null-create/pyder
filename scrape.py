@@ -221,23 +221,24 @@ def extract_social_links(
 # WIKI specific extractors
 
 
-def extract_images(soup: BeautifulSoup, base_url: str):
+def extract_wiki_images(soup: BeautifulSoup, base_url: str) -> Dict[str, str]:
     """Extracts relevant images from a WIKI article."""
     images = []
     for img in soup.find_all("img"):
         img_url = urljoin(base_url, img["src"])  # Convert relative URLs to absolute
         if "wikimedia" in img_url or "upload" in img_url:  # Filter for relevant images
             images.append(img_url)
-    return images
+    return {"images": images}
 
 
-def extract_wiki_content(soup: BeautifulSoup):
+def extract_wiki_content(soup: BeautifulSoup) -> Dict[str, str]:
     """Extracts the main content of the Wiki article (paragraphs only)."""
     content_div = soup.find("div", {"class": "mw-parser-output"})
     paragraphs = content_div.find_all("p") if content_div else []
-    return "\n".join(
+    content = "\n".join(
         p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True)
     )
+    return {"content": content}
 
 
 def extract_main_content(soup: BeautifulSoup, _: URL, __: str = "") -> Dict[str, str]:
@@ -349,8 +350,9 @@ META_DATA_EXTRACTORS: list[ExtractorCallback] = [
 
 # WIKI page extractors
 WIKI_EXTRACTORS: list[ExtractorCallback] = [
+    extract_internal_links,  # Extract internal links
     extract_wiki_content,  # Extract WIKI article content
-    extract_images,  # Extract WIKI image links
+    extract_wiki_images,  # Extract WIKI image links
 ]
 
 # Post and author-specific data extractors
