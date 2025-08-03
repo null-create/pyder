@@ -11,7 +11,7 @@ from scrape import META_DATA_EXTRACTORS, WIKI_EXTRACTORS, CONTENT_EXTRACTORS
 load_dotenv()
 
 
-async def main():
+async def main() -> None:
     # Get main workflow from user
     workflow = (
         input("Choose workflow (data_collection/author_detection): ").strip().lower()
