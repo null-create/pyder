@@ -241,6 +241,9 @@ def extract_wiki_content(soup: BeautifulSoup) -> Dict[str, str]:
     return {"content": content}
 
 
+# Article/blog-post extractors
+
+
 def extract_main_content(soup: BeautifulSoup, _: URL, __: str = "") -> Dict[str, str]:
     """Extracts the main content of an article, blog post, or social media post."""
 
