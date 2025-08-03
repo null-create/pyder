@@ -114,9 +114,9 @@ def extract_posts(soup: BeautifulSoup, url: URL, author: str) -> list[Dict[str, 
                 posts.append(
                     {
                         "author": post_author,
-                        "post_content": post_content,
+                        "content": post_content,
                         "timestamp": timestamp,
-                        "thread_url": str(url),
+                        "url": str(url),
                     }
                 )
 
