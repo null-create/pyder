@@ -1,3 +1,4 @@
+import os
 import asyncio
 
 import questionary
@@ -12,17 +13,28 @@ from scrape import META_DATA_EXTRACTORS, WIKI_EXTRACTORS, CONTENT_EXTRACTORS
 load_dotenv()
 
 
+def get_file_paths() -> tuple[str, str | None]:
+    model_file = os.getenv("PYDER_MODEL_FILE")
+    tokenizer_file = os.getenv("PYDER_TOKENIZER_FILE")
+    if not model_file:  # we need at least the path to the model file
+        raise ValueError(f"❌ missing model file path")
+
+    return model_file, tokenizer_file
+
+
 async def main() -> None:
     # Get main workflow from user
     workflow = questionary.select(
-        "Select workflow", choices=[DISCOVERY, ANALYSIS], default=DISCOVERY
+        f"select workflow (default mode: {DISCOVERY})",
+        choices=[DISCOVERY, ANALYSIS],
+        default=DISCOVERY,
     ).ask()
 
     # Load trained model for author detection (if applicable)
     model, tokenizer = None, None
     if workflow == ANALYSIS:
-        if workflow == "author_detection":
-            model, tokenizer = load_trained_model("model.pkl", "tokenizer.pkl")
+        model_file, tokenizer_file = get_file_paths()
+        model, tokenizer = load_trained_model(model_file, tokenizer_file)
 
     # Get starting seed data (urls, keywords, author, etc)
     seed_data = get_starting_data()
@@ -37,7 +49,7 @@ async def main() -> None:
         workflow=workflow,
         model=model,
         tokenizer=tokenizer,
-        callbacks=META_DATA_EXTRACTORS,
+        callbacks=CONTENT_EXTRACTORS,
         keywords=seed_data["keywords"],
     ) as crawler:
         await crawler.run(seed_data["urls"])
