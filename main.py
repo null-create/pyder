@@ -1,5 +1,6 @@
 import asyncio
 
+import questionary
 from dotenv import load_dotenv
 
 from model import load_trained_model
@@ -13,9 +14,9 @@ load_dotenv()
 
 async def main() -> None:
     # Get main workflow from user
-    workflow = (
-        input("Choose workflow (data_collection/author_detection): ").strip().lower()
-    )
+    workflow = questionary.select(
+        "Select workflow", choices=[DISCOVERY, ANALYSIS], default=DISCOVERY
+    ).ask()
 
     # Load trained model for author detection (if applicable)
     model, tokenizer = None, None
