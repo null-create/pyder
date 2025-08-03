@@ -313,16 +313,17 @@ def run_model() -> None:
         log.error(f"❌ Unexpected error: {e}")
 
 
-def train_model() -> None:
+def train_model(dataset: str) -> None:
     """
     Example usage of training a new model.
     Loads CSV data, automatically selects a model, trains it, and saves results.
+
+    dataset should be a path to a CSV file
     """
     try:
-        file_path = "forum_posts.csv"
         model_trainer = ModelTrainer()
 
-        X, y, dataset_info = model_trainer.load_and_prepare_data(file_path)
+        X, y, dataset_info = model_trainer.load_and_prepare_data(dataset)
         best_model = model_trainer.select_best_model(dataset_info)
 
         X_train, X_val, y_train, y_val = train_test_split(
@@ -334,7 +335,7 @@ def train_model() -> None:
         model_trainer.save_model()
 
     except FileNotFoundError:
-        log.error(f"❌ {file_path} file not found.")
+        log.error(f"❌ {dataset} file not found.")
     except Exception as e:
         log.error(f"❌ Unexpected error: {e}")
 
