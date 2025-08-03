@@ -331,6 +331,10 @@ async def run_crawler(
 
 if __name__ == "__main__":
     workflow = DISCOVERY
+
     starting_data = get_starting_data()
     author = starting_data["author"]
     seed_urls = starting_data["urls"]
+    keywords = starting_data["keywords"]
+
+    asyncio.run(run_crawler(seed_urls, workflow, author, keywords))
