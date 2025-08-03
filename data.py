@@ -8,6 +8,8 @@ from typing import Dict, Any
 import numpy as np
 from loguru import logger as log
 
+REQUIRED_KEYS = ["author", "content", "timestamp", "url"]
+
 
 def ensure_directory_exists(directory: str) -> None:
     """Creates the directory if it does not exist."""
@@ -17,9 +19,9 @@ def ensure_directory_exists(directory: str) -> None:
 def get_model_and_tokenizer_filenames() -> tuple[str, str]:
     """Retrieves model and tokenizer filenames from the environment
 
-    MODEL_FILE and TOKENIZER_FILE must be set!"""
-    model_file = os.getenv("MODEL_FILE")
-    tokenizer_file = os.getenv("TOKENIZER_FILE")
+    PYDER_MODEL_FILE and PYDER_TOKENIZER_FILE must be set!"""
+    model_file = os.getenv("PYDER_MODEL_FILE")
+    tokenizer_file = os.getenv("PYDER_TOKENIZER_FILE")
     if not model_file or not tokenizer_file:
         raise ValueError(
             f"❌ Missing model file (model={model_file}) or tokenizer file (tokenizer={tokenizer_file})"
@@ -148,8 +150,15 @@ class DataHandler:
         self.output_format = output_format.lower()
         self.output_file = f"{output_file_name}.{self.output_format}"
 
+    def has_required_keys(data: dict) -> bool:
+        """Ensure data objects have the required keys"""
+        return all(list(data.keys()), REQUIRED_KEYS)
+
     def store(self, data: Dict[str, Any]) -> None:
         """Cache data before writing out."""
+        if not self.has_required_keys(data):
+            log.warning("missing keys in data object")
+            return
         self.output.append(data)
 
     def dump(self) -> None:
@@ -188,22 +197,15 @@ class DataHandler:
                 writer = csv.writer(file)
                 # add initial header if we're creating the file for the first time
                 if not file_exists:
-                    writer.writerow(
-                        [
-                            "author",
-                            "post_content",
-                            "timestamp",
-                            "thread_url",
-                        ]
-                    )
+                    writer.writerow(REQUIRED_KEYS)
 
                 for post in data:
                     writer.writerow(
                         [
                             post["author"],
-                            post["post_content"],
+                            post["content"],
                             post["timestamp"],
-                            post["thread_url"],
+                            post["url"],
                         ]
                     )
         except Exception as e:
