@@ -24,6 +24,7 @@ async def main() -> None:
         if workflow == "author_detection":
             model, tokenizer = load_trained_model("model.pkl", "tokenizer.pkl")
 
+    # Get starting seed data (urls, keywords, author, etc)
     seed_data = get_starting_data()
 
     # Initialize DataHandler & Crawler
