@@ -62,12 +62,14 @@ def get_starting_data() -> dict:
     }
     ```
     """
-    file = "seed-data.json"
-    if not os.path.exists(file):
-        raise FileNotFoundError(f"❌ {file} file not found")
+    seed_file = os.path.join(
+        os.path.abspath(os.path.dirname(__file__)), "seed-data.json"
+    )
+    if not os.path.exists(seed_file):
+        raise FileNotFoundError(f"❌ {seed_file} file not found")
 
-    with open(file, "r") as f:
-        seed_data = json.load(fp=f)
+    with open(seed_file, "r") as f:
+        seed_data: dict = json.load(fp=f)
 
     return seed_data
 
