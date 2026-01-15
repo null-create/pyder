@@ -54,11 +54,13 @@ def get_starting_data() -> dict:
     Expects something like:
     ```
     {
-        "author": "sepiatune",
-        "handle": "sepiatune",
-        "home": "https://x.com/sepiatune",
-        "urls": ["https://x.com/sepiatune/status/1828124393245172094"],
-        "keywords": ["trump", "president", "executive", "order", "DOGE"]
+        "home": "",
+        "urls": [],
+        "author": "",
+        "handle": "",
+        "keywords": [],
+        "search-depth": 0,
+        "workflow": ""
     }
     ```
     """

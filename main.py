@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import asyncio
 
@@ -44,12 +46,13 @@ async def main() -> None:
         filters=generate_url_filters(seed_data["urls"]),
         data_handler=DataHandler(
             output_file_name="scraped-data",
-            output_format="csv" if workflow == DISCOVERY else "json",
+            output_format="json",
         ),
         workflow=workflow,
         model=model,
         tokenizer=tokenizer,
-        callbacks=CONTENT_EXTRACTORS,
+        search_depth=seed_data["search-depth"],
+        callbacks=WIKI_EXTRACTORS,
         keywords=seed_data["keywords"],
     ) as crawler:
         await crawler.run(seed_data["urls"])

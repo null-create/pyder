@@ -236,11 +236,14 @@ class Crawler:
                 data = callback_fn(
                     BeautifulSoup(response.text, "html.parser"),
                     str(response.url),
+                    self.author,
                 )
                 if isinstance(data, list):
                     extracted_data += data
                 elif isinstance(data, dict):
                     extracted_data.append(data)
+                else:
+                    log.warning(f"Unexpected returned data type: {type(data)}")
 
         if self.export:
             self.data.export(extracted_data)
@@ -305,6 +308,7 @@ async def run_crawler(
     seed_urls: list[str],
     workflow: str,
     author: str,
+    outfile: str = None,
     keywords: list[str] = None,
     model: Model = None,
     tokenizer: Optional[Any] = None,
@@ -313,18 +317,24 @@ async def run_crawler(
         model_file, tokenizer_file = get_model_and_tokenizer_filenames()
         model, tokenizer = load_trained_model(model_file, tokenizer_file)
 
+    outfile = (
+        os.path.join(os.path.abspath(os.path.dirname(__file__)), "data", "scraped-data")
+        if not outfile
+        else outfile
+    )
+
     async with Crawler(
         filters=generate_url_filters(seed_urls),
         data_handler=DataHandler(
-            output_file_name=os.path.join("data", "scraped-data"),
-            output_format="csv" if workflow == DISCOVERY else "json",
+            output_file_name=outfile,
+            output_format="json",
         ),
         workflow=workflow,
         author=author,
         model=model,
         tokenizer=tokenizer,
         keywords=keywords,
-        callbacks=META_DATA_EXTRACTORS,
+        callbacks=WIKI_EXTRACTORS,
     ) as crawler:
         await crawler.run(seed_urls)
 
@@ -333,8 +343,9 @@ if __name__ == "__main__":
     workflow = DISCOVERY
 
     starting_data = get_starting_data()
-    author = starting_data["author"]
     seed_urls = starting_data["urls"]
-    keywords = starting_data["keywords"]
+    author = starting_data["author"] if "author" in starting_data else None
+    keywords = starting_data["keywords"] if "keywords" in starting_data else None
+    outfile = starting_data["outfile"] if "outfile" in starting_data else None
 
     asyncio.run(run_crawler(seed_urls, workflow, author, keywords))

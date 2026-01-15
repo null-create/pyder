@@ -10,8 +10,5 @@ pandas
 scikit-learn 
 nltk 
 joblib
-keras
-keras_hub
-tensorflow
 playwright
 questionary

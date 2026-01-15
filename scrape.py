@@ -19,15 +19,29 @@ from nltk.tokenize import word_tokenize
 
 from data import get_starting_data
 
-nltk.download("punkt_tab")
-nltk.download("maxent_ne_chunker_tab")
-nltk.download("averaged_perceptron_tagger_eng")
-
 
 # Define type alias for extraction function signatures
 ExtractorCallback = Callable[
     [BeautifulSoup, URL, str], Dict[str, Any] | List[Dict[str, Any]]
 ]
+
+
+# Add or download resources as necessary
+def ensure_nltk_resource(resource_path: str, download_name: str) -> None:
+    try:
+        nltk.data.find(resource_path)
+    except LookupError:
+        nltk.download(download_name)
+
+
+# nltk.download("punkt_tab")
+# nltk.download("maxent_ne_chunker_tab")
+# nltk.download("averaged_perceptron_tagger_eng")
+
+# See: https://www.nltk.org/nltk_data/
+ensure_nltk_resource("tokenizers/punkt", "punkt")
+ensure_nltk_resource("chunkers/maxent_ne_chunker", "maxent_ne_chunker")
+ensure_nltk_resource("taggers/averaged_perceptron_tagger", "averaged_perceptron_tagger")
 
 
 async def fetch_html(url: URL) -> httpx.Response:
@@ -221,7 +235,7 @@ def extract_social_links(
 # WIKI specific extractors
 
 
-def extract_wiki_images(soup: BeautifulSoup, base_url: str) -> Dict[str, str]:
+def extract_wiki_images(soup: BeautifulSoup, base_url: str, _: str) -> Dict[str, str]:
     """Extracts relevant images from a WIKI article."""
     images = []
     for img in soup.find_all("img"):
@@ -231,7 +245,7 @@ def extract_wiki_images(soup: BeautifulSoup, base_url: str) -> Dict[str, str]:
     return {"images": images}
 
 
-def extract_wiki_content(soup: BeautifulSoup) -> Dict[str, str]:
+def extract_wiki_content(soup: BeautifulSoup, _: URL, __: str = "") -> Dict[str, str]:
     """Extracts the main content of the Wiki article (paragraphs only)."""
     content_div = soup.find("div", {"class": "mw-parser-output"})
     paragraphs = content_div.find_all("p") if content_div else []
