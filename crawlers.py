@@ -344,8 +344,8 @@ if __name__ == "__main__":
 
     starting_data = get_starting_data()
     seed_urls = starting_data["urls"]
-    author = starting_data["author"] if "author" in starting_data else None
-    keywords = starting_data["keywords"] if "keywords" in starting_data else None
-    outfile = starting_data["outfile"] if "outfile" in starting_data else None
+    author = starting_data["author"]
+    keywords = starting_data["keywords"]
+    outfile = starting_data["outfile"]
 
     asyncio.run(run_crawler(seed_urls, workflow, author, keywords))

@@ -60,7 +60,8 @@ def get_starting_data() -> dict:
         "handle": "",
         "keywords": [],
         "search-depth": 0,
-        "workflow": ""
+        "workflow": "",
+        "outfile": ""
     }
     ```
     """
@@ -72,6 +73,21 @@ def get_starting_data() -> dict:
 
     with open(seed_file, "r") as f:
         seed_data: dict = json.load(fp=f)
+
+    required_keys = [
+        "home",
+        "urls",
+        "author",
+        "handle",
+        "keywords",
+        "search-depth",
+        "workflow",
+        "outfile",
+    ]
+    if not all(key in seed_data for key in required_keys):
+        raise KeyError(
+            f"❌ Missing required keys in seed data file:\nrequired: {', '.join(required_keys)}\nfound:{', '.join(seed_data.keys())}"
+        )
 
     return seed_data
 
