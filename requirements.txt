@@ -1,3 +1,4 @@
+# Base Libraries
 httpx 
 parsel 
 w3lib 
@@ -9,6 +10,6 @@ numpy
 pandas 
 scikit-learn 
 nltk 
-joblib
 playwright
 questionary
+pydantic
