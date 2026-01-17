@@ -4,11 +4,23 @@ import csv
 import json
 import gzip
 from typing import Dict, Any
+from pydantic import BaseModel
 
 import numpy as np
 from loguru import logger as log
 
-REQUIRED_KEYS = ["author", "content", "timestamp", "url"]
+REQUIRED_ROWS = ["author", "content", "timestamp", "url"]
+
+
+class SeedData(BaseModel):
+    home: str
+    urls: list[str]
+    author: str
+    handle: str
+    keywords: list[str]
+    search_depth: int
+    workflow: str
+    outfile: str
 
 
 def ensure_directory_exists(directory: str) -> None:
@@ -74,20 +86,10 @@ def get_starting_data() -> dict:
     with open(seed_file, "r") as f:
         seed_data: dict = json.load(fp=f)
 
-    required_keys = [
-        "home",
-        "urls",
-        "author",
-        "handle",
-        "keywords",
-        "search-depth",
-        "workflow",
-        "outfile",
-    ]
-    if not all(key in seed_data for key in required_keys):
-        raise KeyError(
-            f"❌ Missing required keys in seed data file:\nrequired: {', '.join(required_keys)}\nfound:{', '.join(seed_data.keys())}"
-        )
+    try:
+        _ = SeedData(**seed_data)
+    except Exception as e:
+        raise ValueError(f"❌ Invalid seed-data.json format: {e}")
 
     return seed_data
 
@@ -172,7 +174,7 @@ class DataHandler:
 
     def has_required_keys(data: dict) -> bool:
         """Ensure data objects have the required keys"""
-        return all(list(data.keys()), REQUIRED_KEYS)
+        return all(list(data.keys()), REQUIRED_ROWS)
 
     def store(self, data: Dict[str, Any]) -> None:
         """Cache data before writing out."""
@@ -217,7 +219,7 @@ class DataHandler:
                 writer = csv.writer(file)
                 # add initial header if we're creating the file for the first time
                 if not file_exists:
-                    writer.writerow(REQUIRED_KEYS)
+                    writer.writerow(REQUIRED_ROWS)
 
                 for post in data:
                     writer.writerow(
