@@ -4,10 +4,10 @@ import csv
 import json
 import gzip
 from typing import Dict, Any
-from pydantic import BaseModel
 
 import numpy as np
 from loguru import logger as log
+from pydantic import BaseModel
 
 REQUIRED_ROWS = ["author", "content", "timestamp", "url"]
 
