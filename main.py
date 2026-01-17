@@ -10,7 +10,7 @@ from model import load_trained_model
 from urls import generate_url_filters
 from data import DataHandler, get_starting_data
 from crawlers import Crawler, ANALYSIS, DISCOVERY
-from scrape import META_DATA_EXTRACTORS, WIKI_EXTRACTORS, CONTENT_EXTRACTORS
+from scrape import DATA_EXTRACTORS, WIKI_EXTRACTORS, CONTENT_EXTRACTORS
 
 load_dotenv()
 

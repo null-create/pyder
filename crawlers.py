@@ -17,7 +17,7 @@ from keras.api.preprocessing.sequence import pad_sequences
 from model import Model, load_trained_model
 from urls import UrlFilter, generate_url_filters
 from scrape import (
-    META_DATA_EXTRACTORS,
+    DATA_EXTRACTORS,
     CONTENT_EXTRACTORS,
     WIKI_EXTRACTORS,
     ExtractorCallback,
