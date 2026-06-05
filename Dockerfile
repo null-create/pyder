@@ -13,18 +13,11 @@ RUN apt-get update -y && apt-get upgrade -y && \
   apt-get install -y --no-install-recommends curl wget && \
   rm -rf /var/lib/apt/lists/*
 
-# install dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-  libnss3 libatk1.0-0 libatk-bridge2.0-0 \
-  libx11-xcb1 libxcomposite1 libxcursor1 libxdamage1 \
-  libxfixes3 libxi6 libxrandr2 \
-  libgbm1 libglib2.0-0 libasound2 \
-  && rm -rf /var/lib/apt/lists/*
-
+# install python dependencies
 RUN pip install -r requirements.txt --no-cache
 
 # minimize image
 RUN apt-get autoremove -y && apt-get clean && \
   rm -rf /var/lib/apt/lists/*
 
-ENTRYPOINT ["python", "crawlers.py"]
+CMD ["python", "crawlers.py"]

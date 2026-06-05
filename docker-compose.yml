@@ -1,21 +1,17 @@
 version: "3.9"
 
 services:
-  app:
+  crawler:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: pyder
     volumes:
-      - app_data:/app/data
+      - ./data:/app/data
     environment:
       - PYTHONUNBUFFERED=1
       - PYTHONFAULTHANDLER=1
       - PYTHONHASHSEED=random
       - PIP_NO_CACHE_DIR=1
       - PIP_DISABLE_PIP_VERSION_CHECK=1
-    command: ["python", "crawlers.py"]
     restart: unless-stopped
-
-volumes:
-  app_data:
