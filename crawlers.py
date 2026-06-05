@@ -68,9 +68,7 @@ class Crawler:
         for response in responses:
             for callback_fn in self.callbacks:
                 data = callback_fn(
-                    BeautifulSoup(response.text, "html.parser"),
-                    str(response.url),
-                    " ,".join(self.keywords),
+                    BeautifulSoup(response.text, "html.parser"), str(response.url)
                 )
                 if isinstance(data, list):
                     extracted_data += data

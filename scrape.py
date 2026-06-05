@@ -21,7 +21,7 @@ from data import get_starting_data
 
 # Define type alias for extraction function signatures
 ExtractorCallback = Callable[
-    [BeautifulSoup, URL, str], Dict[str, Any] | List[Dict[str, Any]]
+    [BeautifulSoup, URL], Dict[str, Any] | List[Dict[str, Any]]
 ]
 
 
@@ -66,7 +66,7 @@ def is_likely_name(text: str) -> bool:
     )
 
 
-def extract_names(soup: BeautifulSoup, _: URL, __: str) -> Dict[str, List[str]]:
+def extract_names(soup: BeautifulSoup, _: URL) -> Dict[str, List[str]]:
     """Extracts potential names of people from the webpage content using NER and regex."""
     text_content = " ".join(
         tag.get_text(strip=True) for tag in soup.find_all(["h1", "h2", "h3", "p"])
@@ -95,7 +95,7 @@ def extract_names(soup: BeautifulSoup, _: URL, __: str) -> Dict[str, List[str]]:
     return {"names": unique_names if unique_names else ["No names found"]}
 
 
-def extract_posts(soup: BeautifulSoup, url: URL, author: str) -> list[Dict[str, str]]:
+def extract_posts(soup: BeautifulSoup, url: URL) -> list[Dict[str, str]]:
     """Extracts forum posts by the target author from a given thread URL."""
 
     # Forum-specific extraction logic
@@ -115,38 +115,33 @@ def extract_posts(soup: BeautifulSoup, url: URL, author: str) -> list[Dict[str, 
 
         if author_tag and content_tag:
             post_author = author_tag.get_text(strip=True).lower()
-            if post_author == author:
-                post_content = (
-                    content_tag.get_text(strip=True)
-                    if post_content
-                    else "Unable to retrive post content"
-                )
-                timestamp = (
-                    timestamp_tag.get_text(strip=True) if timestamp_tag else "Unknown"
-                )
-                posts.append(
-                    {
-                        "author": post_author,
-                        "content": post_content,
-                        "timestamp": timestamp,
-                        "url": str(url),
-                    }
-                )
+            post_content = (
+                content_tag.get_text(strip=True)
+                if post_content
+                else "Unable to retrive post content"
+            )
+            timestamp = (
+                timestamp_tag.get_text(strip=True) if timestamp_tag else "Unknown"
+            )
+            posts.append(
+                {
+                    "author": post_author,
+                    "content": post_content,
+                    "timestamp": timestamp,
+                    "url": str(url),
+                }
+            )
 
     return posts
 
 
-def extract_links(
-    soup: BeautifulSoup, base_url: URL, _: str = ""
-) -> Dict[str, List[str]]:
+def extract_links(soup: BeautifulSoup, base_url: URL) -> Dict[str, List[str]]:
     """Extracts all links from the webpage."""
     links = [urljoin(str(base_url), a["href"]) for a in soup.find_all("a", href=True)]
     return {"links": links}
 
 
-def extract_file_downloads(
-    soup: BeautifulSoup, base_url: URL, _: str = ""
-) -> Dict[str, List[str]]:
+def extract_file_downloads(soup: BeautifulSoup, base_url: URL) -> Dict[str, List[str]]:
     """Filters links for common downloadable file types."""
     links = extract_links(soup, base_url)["links"]
     file_extensions = (
@@ -168,9 +163,7 @@ def extract_file_downloads(
     return {"file_downloads": file_downloads}
 
 
-def extract_internal_links(
-    soup: BeautifulSoup, base_url: URL, _: str = ""
-) -> Dict[str, List[str]]:
+def extract_internal_links(soup: BeautifulSoup, base_url: URL) -> Dict[str, List[str]]:
     """Extracts internal links that belong to the same domain."""
     parsed_base = urlparse(str(base_url)).netloc
     links = extract_links(soup, base_url)["links"]
@@ -178,9 +171,7 @@ def extract_internal_links(
     return {"internal_links": internal_links}
 
 
-def extract_external_links(
-    soup: BeautifulSoup, base_url: URL, _: str = ""
-) -> Dict[str, List[str]]:
+def extract_external_links(soup: BeautifulSoup, base_url: URL) -> Dict[str, List[str]]:
     """Extracts external links that belong to different domains."""
     parsed_base = urlparse(str(base_url)).netloc
     links = extract_links(soup, base_url)["links"]
@@ -188,7 +179,7 @@ def extract_external_links(
     return {"external_links": external_links}
 
 
-def extract_metadata(soup: BeautifulSoup, _: URL, __: str = "") -> Dict[str, str]:
+def extract_metadata(soup: BeautifulSoup, _: URL) -> Dict[str, str]:
     """Extracts metadata such as title, description, and keywords."""
     title = soup.title.string.strip() if soup.title else "No Title"
     description = soup.find("meta", attrs={"name": "description"})
@@ -203,9 +194,7 @@ def extract_metadata(soup: BeautifulSoup, _: URL, __: str = "") -> Dict[str, str
     }
 
 
-def extract_social_links(
-    soup: BeautifulSoup, base_url: URL, _: str = ""
-) -> Dict[str, List[str]]:
+def extract_social_links(soup: BeautifulSoup, base_url: URL) -> Dict[str, List[str]]:
     """Extracts social media links from the webpage."""
     social_domains = (
         "facebook.com",
@@ -225,7 +214,7 @@ def extract_social_links(
 # WIKI specific extractors
 
 
-def extract_wiki_images(soup: BeautifulSoup, base_url: str, _: str) -> Dict[str, str]:
+def extract_wiki_images(soup: BeautifulSoup, base_url: str) -> Dict[str, str]:
     """Extracts relevant images from a WIKI article."""
     images = []
     for img in soup.find_all("img"):
@@ -235,7 +224,7 @@ def extract_wiki_images(soup: BeautifulSoup, base_url: str, _: str) -> Dict[str,
     return {"images": images}
 
 
-def extract_wiki_content(soup: BeautifulSoup, _: URL, __: str = "") -> Dict[str, str]:
+def extract_wiki_content(soup: BeautifulSoup, _: URL) -> Dict[str, str]:
     """Extracts the main content of the Wiki article (paragraphs only)."""
     content_div = soup.find("div", {"class": "mw-parser-output"})
     paragraphs = content_div.find_all("p") if content_div else []
@@ -248,7 +237,7 @@ def extract_wiki_content(soup: BeautifulSoup, _: URL, __: str = "") -> Dict[str,
 # Article/blog-post extractors
 
 
-def extract_main_content(soup: BeautifulSoup, _: URL, __: str = "") -> Dict[str, str]:
+def extract_main_content(soup: BeautifulSoup, _: URL) -> Dict[str, str]:
     """Extracts the main content of an article, blog post, or social media post."""
 
     # Try extracting from standard article-like structures
@@ -306,7 +295,7 @@ def search_keywords(soup: BeautifulSoup, keywords: List[str]) -> Dict[str, List[
 
 # used for testing
 async def scrape_page(
-    url: URL, author: str, keywords: List[str] = None
+    url: URL, keywords: List[str] = None
 ) -> tuple[Dict[str, List[str]], list]:
     """Fetches a webpage and extracts names and keyword matches."""
     try:
@@ -326,14 +315,14 @@ async def scrape_page(
 
         extracted_data = []
         for extraction_fn in META_DATA_EXTRACTORS:
-            data = extraction_fn(soup, url, author)
+            data = extraction_fn(soup, url)
             if isinstance(data, list):
                 extracted_data += data
             elif isinstance(data, dict):
                 extracted_data.append(data)
 
         for extraction_fn in CONTENT_EXTRACTORS:
-            data = extraction_fn(soup, url, author)
+            data = extraction_fn(soup, url)
             if isinstance(data, list):
                 extracted_data += data
             elif isinstance(data, dict):
@@ -374,4 +363,4 @@ if __name__ == "__main__":
     author = starting_data["author"]
     keywords = starting_data["keywords"]
 
-    asyncio.run(scrape_page(URL(url), author, keywords))
+    asyncio.run(scrape_page(URL(url), keywords))
