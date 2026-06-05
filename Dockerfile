@@ -20,4 +20,4 @@ RUN pip install -r requirements.txt --no-cache
 RUN apt-get autoremove -y && apt-get clean && \
   rm -rf /var/lib/apt/lists/*
 
-CMD ["python", "crawlers.py"]
+CMD ["python", "main.py"]
