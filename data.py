@@ -5,7 +5,6 @@ import json
 import gzip
 from typing import Dict, Any
 
-import numpy as np
 from loguru import logger as log
 from pydantic import BaseModel
 
