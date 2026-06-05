@@ -1,7 +1,7 @@
 import os
 import asyncio
 from urllib.parse import urljoin
-from typing import Dict, List, Tuple, Any, Optional
+from typing import Dict, List, Tuple
 
 import httpx
 from httpx import Response
