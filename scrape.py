@@ -19,7 +19,6 @@ from nltk.tokenize import word_tokenize
 
 from data import get_starting_data
 
-
 # Define type alias for extraction function signatures
 ExtractorCallback = Callable[
     [BeautifulSoup, URL, str], Dict[str, Any] | List[Dict[str, Any]]
@@ -143,15 +142,6 @@ def extract_links(
     """Extracts all links from the webpage."""
     links = [urljoin(str(base_url), a["href"]) for a in soup.find_all("a", href=True)]
     return {"links": links}
-
-
-def extract_named_mentions(
-    soup: BeautifulSoup, _: URL, author_name: str
-) -> Dict[str, List[str]]:
-    """Finds mentions of the author's name in text."""
-    text_content = soup.get_text(" ")
-    mentions = re.findall(rf"\b{re.escape(author_name)}\b", text_content, re.IGNORECASE)
-    return {"author_mentions": mentions if mentions else ["No mentions found."]}
 
 
 def extract_file_downloads(
