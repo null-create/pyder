@@ -17,7 +17,7 @@ async def main() -> None:
             output_file_name="scraped-data",
             output_format="json",
         ),
-        search_depth=seed_data["search-depth"],
+        search_depth=seed_data["search-depth"] or 1,
         callbacks=CONTENT_EXTRACTORS + META_DATA_EXTRACTORS,
         keywords=seed_data["keywords"],
     ) as crawler:
