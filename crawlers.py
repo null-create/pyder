@@ -8,7 +8,6 @@ from httpx import Response
 from parsel import Selector
 from bs4 import BeautifulSoup
 from loguru import logger as log
-from dotenv import load_dotenv
 
 from urls import UrlFilter, generate_url_filters
 from scrape import (
@@ -16,8 +15,6 @@ from scrape import (
     ExtractorCallback,
 )
 from data import DataHandler, get_starting_data
-
-load_dotenv()
 
 ### Configurations ###
 TIMEOUT = 3000000  # microseconds
