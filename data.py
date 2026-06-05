@@ -15,11 +15,8 @@ REQUIRED_ROWS = ["author", "content", "timestamp", "url"]
 class SeedData(BaseModel):
     home: str
     urls: list[str]
-    author: str
-    handle: str
     keywords: list[str]
     search_depth: int
-    workflow: str
     outfile: str
 
 
@@ -68,11 +65,8 @@ def get_starting_data() -> dict:
     {
         "home": "",
         "urls": [],
-        "author": "",
-        "handle": "",
         "keywords": [],
         "search-depth": 0,
-        "workflow": "",
         "outfile": ""
     }
     ```
@@ -133,26 +127,6 @@ def decompress_json_gz(file_path: str) -> str:
     except (IOError, json.JSONDecodeError) as e:
         log.error(f"❌ Error decompressing file: {e}")
         return ""
-
-
-def save_data_npbin(
-    X_train: np.ndarray,
-    y_train: np.ndarray,
-    X_val: np.ndarray,
-    y_val: np.ndarray,
-    file_name: str = "train_data.npbin",
-) -> None:
-    """
-    Saves training and validation data in NumPy binary format.
-
-    :param X_train: Training feature matrix.
-    :param y_train: Training labels.
-    :param X_val: Validation feature matrix.
-    :param y_val: Validation labels.
-    :param file_name: Path to save the binary file.
-    """
-    np.savez(file_name, X_train=X_train, y_train=y_train, X_val=X_val, y_val=y_val)
-    log.info(f"✅ Training data saved to {file_name}")
 
 
 class DataHandler:
