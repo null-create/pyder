@@ -182,7 +182,9 @@ class UrlFilter:
         return filtered_urls
 
 
-def generate_url_filters(urls: List[str], venture: bool = True) -> Dict[str, UrlFilter]:
+def generate_url_filters(
+    urls: List[str], venture: bool = False
+) -> Dict[str, UrlFilter]:
     """create a dictionary of URL filters based off the given set of URLs"""
     url_filters: Dict[str, UrlFilter] = {}
 
