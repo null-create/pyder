@@ -8,6 +8,7 @@ from typing import Dict, Any
 from loguru import logger as log
 from pydantic import BaseModel
 
+SEED_DATA_FILE = "seed-data.json"
 REQUIRED_ROWS = ["author", "content", "timestamp", "url"]
 
 
@@ -35,9 +36,7 @@ def get_starting_data() -> dict:
     }
     ```
     """
-    seed_file = os.path.join(
-        os.path.abspath(os.path.dirname(__file__)), "seed-data.json"
-    )
+    seed_file = os.path.join(os.path.abspath(os.path.dirname(__file__)), SEED_DATA_FILE)
     if not os.path.exists(seed_file):
         raise FileNotFoundError(f"❌ {seed_file} file not found")
 
@@ -128,7 +127,7 @@ class DataHandler:
 
     def has_required_keys(data: dict) -> bool:
         """Ensure data objects have the required keys"""
-        return all(list(data.keys()), REQUIRED_ROWS)
+        return all(key in data for key in REQUIRED_ROWS)
 
     def store(self, data: Dict[str, Any]) -> None:
         """Cache data before writing out."""
