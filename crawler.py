@@ -9,15 +9,12 @@ from parsel import Selector
 from bs4 import BeautifulSoup
 from loguru import logger as log
 
-from urls import UrlFilter, generate_url_filters
+from urls import SitemapParser, UrlFilter, generate_url_filters
 from scrape import (
     WIKI_EXTRACTORS,
     ExtractorCallback,
 )
 from data import DataHandler, get_starting_data
-
-### Configurations ###
-TIMEOUT = 3000000  # microseconds
 
 
 class Crawler:
@@ -121,7 +118,8 @@ class Crawler:
 
     async def run(self, start_urls: List[str]) -> None:
         """crawl target to maximum depth or until no more urls are found"""
-        url_pool = start_urls
+        parser = SitemapParser()
+        url_pool = await parser.get_urls(self.session, start_urls)
         depth = 0
         while url_pool and depth <= self.search_depth:
             responses, failures = await self.scrape(url_pool)

@@ -1,10 +1,102 @@
+import asyncio
 import posixpath
-from typing import List, Pattern, Dict
+import xml.etree.ElementTree as ET
+from typing import Dict, List, Optional, Pattern, Set
 from urllib.parse import urlparse
 
+import httpx
 from tldextract import tldextract
 from w3lib.url import canonicalize_url
 from loguru import logger as log
+
+SITEMAP_PATHS = [
+    "/sitemap.xml",
+    "/sitemap_index.xml",
+    "/sitemaps/sitemap.xml",
+]
+SITEMAP_NS = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}
+
+
+class SitemapParser:
+    def __init__(self) -> None:
+        self.seen_sitemaps: Set[str] = set()
+
+    @staticmethod
+    def _sitemap_candidates(url: str) -> List[str]:
+        parsed = urlparse(url)
+        base = f"{parsed.scheme}://{parsed.netloc}"
+        return [f"{base}{path}" for path in SITEMAP_PATHS]
+
+    async def discover(self, session: httpx.AsyncClient, url: str) -> Optional[str]:
+        for candidate in self._sitemap_candidates(url):
+            try:
+                resp = await session.get(candidate, timeout=5.0)
+                if resp.status_code == 200 and "xml" in resp.headers.get(
+                    "content-type", ""
+                ):
+                    log.info(f"found sitemap: {candidate}")
+                    return candidate
+            except Exception:
+                continue
+        return None
+
+    async def _fetch_and_parse(self, session: httpx.AsyncClient, url: str) -> Set[str]:
+        try:
+            resp = await session.get(url, timeout=10.0)
+            if resp.status_code == 200:
+                urls = self._parse_sitemap(resp.content)
+                log.info(f"parsed {len(urls)} URLs from sitemap {url}")
+                return urls
+        except Exception as e:
+            log.warning(f"failed to parse sitemap {url}: {e}")
+        return set()
+
+    @staticmethod
+    def _parse_sitemap(content: bytes) -> Set[str]:
+        urls: Set[str] = set()
+        root = ET.fromstring(content)
+        tag = root.tag.lower()
+
+        if "sitemapindex" in tag:
+            for sitemap in root.findall("sm:sitemap", SITEMAP_NS):
+                loc = sitemap.findtext("sm:loc", "", SITEMAP_NS)
+                if loc:
+                    urls.add(loc)
+        else:
+            for url_elem in root.findall("sm:url", SITEMAP_NS):
+                loc = url_elem.findtext("sm:loc", "", SITEMAP_NS)
+                if loc:
+                    urls.add(loc)
+
+        return urls
+
+    async def get_urls(
+        self, session: httpx.AsyncClient, seed_urls: List[str]
+    ) -> List[str]:
+        all_urls: Set[str] = set(seed_urls)
+
+        tasks = [self.discover(session, url) for url in seed_urls]
+        sitemap_urls = await asyncio.gather(*tasks)
+        sitemap_urls = [su for su in sitemap_urls if su is not None]
+
+        if not sitemap_urls:
+            return seed_urls
+
+        parse_tasks = []
+        for su in sitemap_urls:
+            if su not in self.seen_sitemaps:
+                self.seen_sitemaps.add(su)
+                parse_tasks.append(self._fetch_and_parse(session, su))
+
+        results = await asyncio.gather(*parse_tasks)
+        for result in results:
+            all_urls |= result
+
+        log.info(
+            f"sitemap discovery: expanded {len(seed_urls)} seed URLs"
+            f" to {len(all_urls)} URLs"
+        )
+        return list(all_urls)
 
 
 class UrlFilter:
