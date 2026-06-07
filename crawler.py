@@ -120,6 +120,9 @@ class Crawler:
         """crawl target to maximum depth or until no more urls are found"""
         parser = SitemapParser()
         url_pool = await parser.get_urls(self.session, start_urls)
+        url_pool = (
+            url_pool or start_urls
+        )  # fallback to seed URLs if no sitemap URLs found
         depth = 0
         while url_pool and depth <= self.search_depth:
             responses, failures = await self.retrieve_sites(url_pool)
