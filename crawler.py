@@ -12,6 +12,9 @@ from loguru import logger as log
 from urls import SitemapParser, UrlFilter, generate_url_filters
 from scrape import (
     WIKI_EXTRACTORS,
+    CONTENT_EXTRACTORS,
+    META_EXTRACTORS,
+    POST_EXTRACTORS,
     ExtractorCallback,
 )
 from data import DataHandler, SeedData, get_starting_data
@@ -22,9 +25,15 @@ class Crawler:
         self.session = await httpx.AsyncClient(
             timeout=httpx.Timeout(30.0),
             headers={
-                "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36",
-                "accept": "text/html,application/json,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
-                "accept-language": "en-US;en;q=0.9",
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/120.0.0.0 Safari/537.36"
+                ),
+                "Accept": (
+                    "text/html,application/xhtml+xml," "application/xml;q=0.9,*/*;q=0.8"
+                ),
+                "Accept-Language": "en-US,en;q=0.5",
             },
             follow_redirects=True,
         ).__aenter__()
@@ -37,74 +46,89 @@ class Crawler:
         self,
         filters: Dict[str, UrlFilter],
         data_handler: DataHandler,
-        keywords: list[str] = None,
-        callbacks: list[ExtractorCallback] = None,
-        search_depth: int = None,
+        keywords: list[str] | None = None,
+        callbacks: list[ExtractorCallback] | None = None,
+        search_depth: int | None = None,
         export_data: bool = False,
     ) -> None:
-        self.url_filters = filters  # url filter class
-        self.data = data_handler  # data handler class
-        self.keywords = keywords or []  # list of keywords to search for
-        self.callbacks = callbacks or []  # list of data scraper callbacks
-        self.search_depth = search_depth or 10  # url pool iterations
-        self.export = export_data  # flag for saving json data
+        self.url_filters = filters
+        self.data = data_handler
+        self.keywords = keywords or []
+        self.callbacks = callbacks or []
+        self.search_depth = search_depth or 10
+        self.export = export_data
 
     async def get(self, url: str) -> httpx.Response:
-        """attempts to run a GET request on a given URL"""
+        """Run a GET request on a given URL."""
         return await self.session.get(url, follow_redirects=True, timeout=3.0)
 
     def process_responses(self, responses: list[Response]) -> None:
-        """Run a list of generic scraper callbacks over the given list of responses"""
-        if len(responses) == 0:
+        """Run the configured callbacks over each response and store results."""
+        if not responses:
             return
 
-        extracted_data = []
         for response in responses:
-            for callback_fn in self.callbacks:
-                data = callback_fn(
-                    BeautifulSoup(response.text, "html.parser"), str(response.url)
-                )
-                if isinstance(data, list):
-                    extracted_data += data
-                elif isinstance(data, dict):
-                    extracted_data.append(data)
-                else:
-                    log.warning(f"Unexpected returned data type: {type(data)}")
+            soup = BeautifulSoup(response.text, "html.parser")
+            result: dict = {}
 
-        if self.export:
-            self.data.export(extracted_data)
+            for callback_fn in self.callbacks:
+                try:
+                    data = callback_fn(soup, str(response.url))
+                except Exception as exc:
+                    log.warning(f"Callback {callback_fn.__name__} failed: {exc}")
+                    continue
+
+                if isinstance(data, list):
+                    result.setdefault("posts", [])
+                    result["posts"].extend(data)
+                elif isinstance(data, dict):
+                    for key, value in data.items():
+                        if key not in result:
+                            result[key] = value
+                        elif isinstance(result[key], list) and isinstance(value, list):
+                            result[key].extend(value)
+                        elif isinstance(result[key], dict) and isinstance(value, dict):
+                            result[key].update(value)
+                        else:
+                            result[key] = value
+
+            result.setdefault("url", str(response.url))
+
+            if self.export and result:
+                self.data.store(result)
 
     def find_urls(self, responses: List[httpx.Response]) -> List[str]:
-        """find valid urls in responses"""
-        if len(responses) == 0:
+        """Find valid / followable URLs in responses."""
+        if not responses:
             return []
 
-        all_unique_urls = set()
-        urls_to_follow = []
+        all_unique_urls: set[str] = set()
         for response in responses:
             sel = Selector(text=response.text, base_url=str(response.url))
-            _urls_in_response = set(
+            found = set(
                 urljoin(str(response.url), url.strip())
                 for url in sel.xpath("//a/@href").getall()
             )
-            all_unique_urls |= _urls_in_response
+            all_unique_urls |= found
 
-        if response.url.host in self.url_filters:
-            urls_to_follow += self.url_filters[response.url.host].filter(
-                all_unique_urls
-            )
-        else:
-            urls_to_follow += list(all_unique_urls)
+        urls_to_follow: list[str] = []
+        for response in responses:
+            host = response.url.host
+            if host and host in self.url_filters:
+                urls_to_follow.extend(self.url_filters[host].filter(all_unique_urls))
+            else:
+                urls_to_follow.extend(all_unique_urls)
 
         log.info(
-            f"[+] found {len(urls_to_follow)} urls to follow (from total {len(all_unique_urls)})"
+            f"[+] found {len(urls_to_follow)} urls to follow "
+            f"(from total {len(all_unique_urls)})"
         )
         return urls_to_follow
 
     async def retrieve_sites(
         self, urls: List[str]
     ) -> Tuple[List[httpx.Response], List[Exception]]:
-        """scrape urls and return their responses"""
+        """Scrape URLs and return their responses."""
         responses = []
         failures = []
         log.info(f"🔎 scraping {len(urls)} urls")
@@ -117,21 +141,24 @@ class Crawler:
         return responses, failures
 
     async def run(self, start_urls: List[str]) -> None:
-        """crawl target to maximum depth or until no more urls are found"""
+        """Crawl to configured depth or until no more URLs are discovered."""
         parser = SitemapParser()
         url_pool = await parser.get_urls(self.session, start_urls)
-        url_pool = (
-            url_pool or start_urls
-        )  # fallback to seed URLs if no sitemap URLs found
+        url_pool = url_pool or start_urls
+
         depth = 0
         while url_pool and depth <= self.search_depth:
             responses, failures = await self.retrieve_sites(url_pool)
             log.info(
-                f"depth {depth}: scraped {len(responses)} pages and failed {len(failures)}"
+                f"depth {depth}: scraped {len(responses)} pages, "
+                f"{len(failures)} failed"
             )
             self.process_responses(responses)
             url_pool = self.find_urls(responses)
             depth += 1
+
+        if self.export:
+            self.data.dump()
 
 
 async def run_crawler(seed_data: SeedData) -> None:
@@ -148,7 +175,10 @@ async def run_crawler(seed_data: SeedData) -> None:
             output_format="json",
         ),
         keywords=seed_data.keywords,
-        callbacks=WIKI_EXTRACTORS,
+        callbacks=CONTENT_EXTRACTORS
+        + META_EXTRACTORS
+        + POST_EXTRACTORS
+        + WIKI_EXTRACTORS,
         search_depth=seed_data.search_depth or 10,
         export_data=True,
     ) as crawler:

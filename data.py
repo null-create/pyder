@@ -9,7 +9,12 @@ from loguru import logger as log
 from pydantic import BaseModel
 
 SEED_DATA_FILE = "seed-data.json"
-REQUIRED_ROWS = ["author", "content", "timestamp", "url"]
+
+# Flat fields used for CSV export of page results
+PAGE_COLUMNS = ["url", "title", "content", "description", "author", "timestamp"]
+
+# Flat fields used for CSV export of forum-post results
+POST_COLUMNS = ["author", "content", "timestamp", "url"]
 
 
 class SeedData(BaseModel):
@@ -38,7 +43,7 @@ def get_starting_data() -> dict:
     """
     seed_file = os.path.join(os.path.abspath(os.path.dirname(__file__)), SEED_DATA_FILE)
     if not os.path.exists(seed_file):
-        raise FileNotFoundError(f"❌ {seed_file} file not found")
+        raise FileNotFoundError(f"seed file not found at {seed_file}")
 
     with open(seed_file, "r") as f:
         seed_data: dict = json.load(fp=f)
@@ -46,7 +51,7 @@ def get_starting_data() -> dict:
     try:
         _ = SeedData(**seed_data)
     except Exception as e:
-        raise ValueError(f"❌ Invalid seed-data.json format: {e}")
+        raise ValueError(f"Invalid seed-data.json format: {e}")
 
     return seed_data
 
@@ -54,7 +59,7 @@ def get_starting_data() -> dict:
 def generate_unique_filename(directory: str, filename: str) -> str:
     """
     Generates a unique filename if the file already exists in the directory.
-    Example: 'data.json' → 'data_1.json', 'data_2.json', etc.
+    Example: 'data.json' -> 'data_1.json', 'data_2.json', etc.
     """
     base, ext = os.path.splitext(filename)
     counter = 1
@@ -68,9 +73,9 @@ def generate_unique_filename(directory: str, filename: str) -> str:
 
 
 def preprocess_text(text: str) -> str:
-    """Cleans and normalizes text for training."""
-    text = re.sub(r"\s+", " ", text)  # Normalize whitespace
-    text = re.sub(r"[^a-zA-Z0-9.,!?;'\"]", " ", text)  # Remove unnecessary characters
+    """Cleans and normalizes text for training (aggressive)."""
+    text = re.sub(r"\s+", " ", text)
+    text = re.sub(r"[^a-zA-Z0-9.,!?;'\"]", " ", text)
     return text.lower().strip()
 
 
@@ -85,7 +90,7 @@ def decompress_json_gz(file_path: str) -> str:
         str: Path to the decompressed JSON file.
     """
     if not file_path.endswith(".json.gz"):
-        log.error("❌ Error: File must be a .json.gz compressed file")
+        log.error("File must be a .json.gz compressed file")
         return ""
 
     directory = os.path.dirname(file_path)
@@ -100,11 +105,11 @@ def decompress_json_gz(file_path: str) -> str:
         with open(output_path, "w", encoding="utf-8") as json_file:
             json.dump(data, json_file, indent=2, ensure_ascii=False)
 
-        log.info(f"✅ File successfully decompressed to: {output_path}")
+        log.info(f"File successfully decompressed to: {output_path}")
         return output_path
 
     except (IOError, json.JSONDecodeError) as e:
-        log.error(f"❌ Error decompressing file: {e}")
+        log.error(f"Error decompressing file: {e}")
         return ""
 
 
@@ -116,72 +121,72 @@ class DataHandler:
         output_file_name: str = "output",
     ) -> None:
         """Manages caching and storing extracted data to JSON or CSV format."""
-        self.compress = compress  # only works with json output
-        self.output = []  # cached data to be written out
+        self.compress = compress
+        self.output = []
 
-        if output_format not in ["json", "csv"]:
-            raise ValueError("❌ Invalid format. Use either 'json' or 'csv'.")
+        if output_format not in ("json", "csv"):
+            raise ValueError("Invalid format. Use 'json' or 'csv'.")
 
         self.output_format = output_format.lower()
         self.output_file = f"{output_file_name}.{self.output_format}"
 
-    def has_required_keys(data: dict) -> bool:
-        """Ensure data objects have the required keys"""
-        return all(key in data for key in REQUIRED_ROWS)
-
     def store(self, data: Dict[str, Any]) -> None:
-        """Cache data before writing out."""
-        if not self.has_required_keys(data):
-            log.warning("missing keys in data object")
-            return
+        """Cache a single result dict for later export."""
         self.output.append(data)
 
     def dump(self) -> None:
-        """Empty cache to specified file"""
+        """Write all cached data to file and clear the cache."""
+        if not self.output:
+            log.warning("No data to export")
+            return
         self.export(self.output)
         self.output.clear()
 
     def export(self, data: Dict[str, Any] | list[Dict[str, Any]]) -> None:
-        """Saves extracted data to a file in the specified format."""
+        """Save extracted data to a file in the configured format."""
         if self.output_format == "json":
             self.save_json(data)
         elif self.output_format == "csv":
             self.save_csv(data)
 
     def save_json(self, data: Dict[str, Any] | list[Dict[str, Any]]) -> None:
-        """Appends extracted data to a JSON file"""
+        """Write data as JSON (overwrites file each call)."""
         try:
-            if self.compress:
-                with gzip.open(
-                    self.output_file + ".gz", "wt", encoding="utf-8"
-                ) as gz_file:
-                    json.dump(data, gz_file, ensure_ascii=False, indent=2)
-            else:
-                with open(self.output_file, "a", encoding="utf-8") as file:
-                    json.dump(data, file, ensure_ascii=False, indent=2)
+            out_path = self.output_file + ".gz" if self.compress else self.output_file
+            opener = gzip.open if self.compress else open
+            mode = "wt" if self.compress else "w"
+
+            with opener(out_path, mode, encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
 
         except Exception as e:
-            log.error(f"❌ Error saving JSON: {e}")
+            log.error(f"Error saving JSON: {e}")
 
     def save_csv(self, data: list[Dict[str, Any]]) -> None:
-        """Appends extracted data to a CSV file"""
+        """Write data as CSV (appends rows).  Columns are derived from the
+        union of keys across all rows; nested values are JSON-encoded."""
+        if not data:
+            return
+
         try:
             file_exists = os.path.isfile(self.output_file)
 
-            with open(self.output_file, "a", newline="", encoding="utf-8") as file:
-                writer = csv.writer(file)
-                # add initial header if we're creating the file for the first time
-                if not file_exists:
-                    writer.writerow(REQUIRED_ROWS)
+            # Union of all keys, preserving insertion order
+            fieldnames = list(dict.fromkeys(k for d in data for k in d))
 
-                for post in data:
-                    writer.writerow(
-                        [
-                            post["author"],
-                            post["content"],
-                            post["timestamp"],
-                            post["url"],
-                        ]
-                    )
+            with open(self.output_file, "a", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
+                if not file_exists:
+                    writer.writeheader()
+
+                for row in data:
+                    flat = {}
+                    for k, v in row.items():
+                        if not isinstance(v, (str, int, float, bool)):
+                            flat[k] = json.dumps(v, ensure_ascii=False)
+                        else:
+                            flat[k] = v
+                    writer.writerow(flat)
+
         except Exception as e:
-            log.error(f"❌ Error saving CSV: {e}")
+            log.error(f"Error saving CSV: {e}")
