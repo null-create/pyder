@@ -19,41 +19,6 @@ class SeedData(BaseModel):
     outfile: str
 
 
-def ensure_directory_exists(directory: str) -> None:
-    """Creates the directory if it does not exist."""
-    return os.makedirs(directory, exist_ok=True)
-
-
-def get_model_and_tokenizer_filenames() -> tuple[str, str]:
-    """Retrieves model and tokenizer filenames from the environment
-
-    PYDER_MODEL_FILE and PYDER_TOKENIZER_FILE must be set!"""
-    model_file = os.getenv("PYDER_MODEL_FILE")
-    tokenizer_file = os.getenv("PYDER_TOKENIZER_FILE")
-    if not model_file or not tokenizer_file:
-        raise ValueError(
-            f"❌ Missing model file (model={model_file}) or tokenizer file (tokenizer={tokenizer_file})"
-        )
-
-    return model_file, tokenizer_file
-
-
-def generate_unique_filename(directory: str, filename: str) -> str:
-    """
-    Generates a unique filename if the file already exists in the directory.
-    Example: 'data.json' → 'data_1.json', 'data_2.json', etc.
-    """
-    base, ext = os.path.splitext(filename)
-    counter = 1
-    unique_filename = filename
-
-    while os.path.exists(os.path.join(directory, unique_filename)):
-        unique_filename = f"{base}_{counter}{ext}"
-        counter += 1
-
-    return unique_filename
-
-
 def get_starting_data() -> dict:
     """
     Opens and returns the contents of seed-data.json file.
@@ -85,6 +50,22 @@ def get_starting_data() -> dict:
         raise ValueError(f"❌ Invalid seed-data.json format: {e}")
 
     return seed_data
+
+
+def generate_unique_filename(directory: str, filename: str) -> str:
+    """
+    Generates a unique filename if the file already exists in the directory.
+    Example: 'data.json' → 'data_1.json', 'data_2.json', etc.
+    """
+    base, ext = os.path.splitext(filename)
+    counter = 1
+    unique_filename = filename
+
+    while os.path.exists(os.path.join(directory, unique_filename)):
+        unique_filename = f"{base}_{counter}{ext}"
+        counter += 1
+
+    return unique_filename
 
 
 def preprocess_text(text: str) -> str:
@@ -132,7 +113,7 @@ class DataHandler:
     def __init__(
         self,
         compress: bool = False,
-        output_format: str = "csv",
+        output_format: str = "json",
         output_file_name: str = "output",
     ) -> None:
         """Manages caching and storing extracted data to JSON or CSV format."""
