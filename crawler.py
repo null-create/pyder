@@ -14,13 +14,13 @@ from scrape import (
     WIKI_EXTRACTORS,
     ExtractorCallback,
 )
-from data import DataHandler, get_starting_data
+from data import DataHandler, SeedData, get_starting_data
 
 
 class Crawler:
     async def __aenter__(self):
         self.session = await httpx.AsyncClient(
-            timeout=httpx.Timeout(60.0),
+            timeout=httpx.Timeout(30.0),
             headers={
                 "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36",
                 "accept": "text/html,application/json,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
@@ -45,7 +45,7 @@ class Crawler:
         self.url_filters = filters  # url filter class
         self.data = data_handler  # data handler class
         self.keywords = keywords or []  # list of keywords to search for
-        self.callbacks = callbacks or []  # list data scraper callbacks
+        self.callbacks = callbacks or []  # list of data scraper callbacks
         self.search_depth = search_depth or 10  # url pool iterations
         self.export = export_data  # flag for saving json data
 
@@ -101,7 +101,7 @@ class Crawler:
         )
         return urls_to_follow
 
-    async def scrape(
+    async def retrieve_sites(
         self, urls: List[str]
     ) -> Tuple[List[httpx.Response], List[Exception]]:
         """scrape urls and return their responses"""
@@ -122,7 +122,7 @@ class Crawler:
         url_pool = await parser.get_urls(self.session, start_urls)
         depth = 0
         while url_pool and depth <= self.search_depth:
-            responses, failures = await self.scrape(url_pool)
+            responses, failures = await self.retrieve_sites(url_pool)
             log.info(
                 f"depth {depth}: scraped {len(responses)} pages and failed {len(failures)}"
             )
@@ -131,31 +131,29 @@ class Crawler:
             depth += 1
 
 
-async def run_crawler(
-    seed_urls: list[str], outfile: str = None, keywords: list[str] = None
-) -> None:
+async def run_crawler(seed_data: SeedData) -> None:
     outfile = (
         os.path.join(os.path.abspath(os.path.dirname(__file__)), "data", "scraped-data")
-        if not outfile
-        else outfile
+        if not seed_data.outfile
+        else seed_data.outfile
     )
 
     async with Crawler(
-        filters=generate_url_filters(seed_urls),
+        filters=generate_url_filters(seed_data.urls),
         data_handler=DataHandler(
             output_file_name=outfile,
             output_format="json",
         ),
-        keywords=keywords,
+        keywords=seed_data.keywords,
         callbacks=WIKI_EXTRACTORS,
+        search_depth=seed_data.search_depth or 10,
+        export_data=True,
     ) as crawler:
-        await crawler.run(seed_urls)
+        await crawler.run(seed_data.urls)
 
 
 if __name__ == "__main__":
-    starting_data = get_starting_data()
-    seed_urls = starting_data["urls"]
-    keywords = starting_data["keywords"]
-    outfile = starting_data["outfile"]
+    sd = get_starting_data()
+    seed_data = SeedData(**sd)
 
-    asyncio.run(run_crawler(seed_urls, outfile, keywords))
+    asyncio.run(run_crawler(seed_data))
