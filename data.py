@@ -127,8 +127,11 @@ class DataHandler:
         if output_format not in ("json", "csv"):
             raise ValueError("Invalid format. Use 'json' or 'csv'.")
 
-        self.output_format = output_format.lower()
-        self.output_file = f"{output_file_name}.{self.output_format}"
+        if output_format in output_file_name:
+            self.output_file = output_file_name
+        else:
+            self.output_format = output_format.lower()
+            self.output_file = f"{output_file_name}.{self.output_format}"
 
     def store(self, data: Dict[str, Any]) -> None:
         """Cache a single result dict for later export."""
