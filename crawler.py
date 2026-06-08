@@ -186,7 +186,6 @@ async def run_crawler(seed_data: SeedData) -> None:
 
 
 if __name__ == "__main__":
-    sd = get_starting_data()
-    seed_data = SeedData(**sd)
+    seed_data = get_starting_data()
 
     asyncio.run(run_crawler(seed_data))

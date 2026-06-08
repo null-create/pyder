@@ -25,7 +25,7 @@ class SeedData(BaseModel):
     outfile: str
 
 
-def get_starting_data() -> dict:
+def get_starting_data() -> SeedData:
     """
     Opens and returns the contents of seed-data.json file.
     This file is used for the web crawler's discovery mode.
@@ -46,10 +46,10 @@ def get_starting_data() -> dict:
         raise FileNotFoundError(f"seed file not found at {seed_file}")
 
     with open(seed_file, "r") as f:
-        seed_data: dict = json.load(fp=f)
+        sd: dict = json.load(fp=f)
 
     try:
-        _ = SeedData(**seed_data)
+        seed_data = SeedData(**sd)
     except Exception as e:
         raise ValueError(f"Invalid seed-data.json format: {e}")
 
