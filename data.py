@@ -30,13 +30,13 @@ def get_starting_data() -> SeedData:
     Opens and returns the contents of seed-data.json file.
     This file is used for the web crawler's discovery mode.
 
-    Expects something like:
+    Expects a JSON file with the following structure:
     ```
     {
         "home": "",
         "urls": [],
         "keywords": [],
-        "search-depth": 0,
+        "search_depth": 0,
         "outfile": ""
     }
     ```

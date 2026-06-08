@@ -1,13 +1,9 @@
-# Base Libraries
 httpx 
 parsel 
 w3lib 
 python-dotenv
-tldextract 
+tldextract
 loguru
 beautifulsoup4
-numpy 
-pandas 
-scikit-learn 
 nltk 
 pydantic
