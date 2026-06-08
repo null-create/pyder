@@ -159,19 +159,14 @@ class UrlFilter:
         filtered_urls = []
         for url in urls:
             if not self.is_valid_scheme(url):
-                log.debug(f"drop ignored scheme {url}")
                 continue
             if not self.venture and not self.is_valid_domain(url):
-                log.debug(f"drop offsite url {url}")
                 continue
             if not self.is_valid_ext(url):
-                log.debug(f"drop ignored extension {url}")
                 continue
             if not self.is_valid_path(url):
-                log.debug(f"drop ignored path {url}")
                 continue
             if not self.is_new(url):
-                log.debug(f"drop duplicate {url}")
                 continue
             self.seen.add(canonicalize_url(url))
             filtered_urls.append(url)
