@@ -1,15 +1,17 @@
 import os
 import asyncio
-from urllib.parse import urljoin
-from typing import Dict, List, Tuple
+from collections import defaultdict
+from urllib.parse import urljoin, urlparse
+from typing import Dict, List, Optional, Tuple
 
 import httpx
 from httpx import Response
 from parsel import Selector
 from bs4 import BeautifulSoup
 from loguru import logger as log
+from w3lib.url import canonicalize_url
 
-from urls import SitemapParser, UrlFilter, generate_url_filters
+from urls import SitemapParser, UrlFilter, generate_url_filters, get_domain
 from scrape import (
     WIKI_EXTRACTORS,
     CONTENT_EXTRACTORS,
@@ -57,6 +59,7 @@ class Crawler:
         self.callbacks = callbacks or []
         self.search_depth = search_depth or 10
         self.export = export_data
+        self.visited: set[str] = set()
 
     async def get(self, url: str) -> httpx.Response:
         """Run a GET request on a given URL."""
@@ -111,19 +114,44 @@ class Crawler:
             )
             all_unique_urls |= found
 
+        by_domain: dict[str, list[str]] = defaultdict(list)
+        for url in all_unique_urls:
+            parsed = urlparse(url)
+            hostname = parsed.hostname or ""
+            domain = get_domain(hostname)
+            by_domain[domain].append(url)
+
         urls_to_follow: list[str] = []
-        for response in responses:
-            host = response.url.host
-            if host and host in self.url_filters:
-                urls_to_follow.extend(self.url_filters[host].filter(all_unique_urls))
+        for domain, domain_urls in by_domain.items():
+            host_filter = self._find_host_filter(domain)
+            if host_filter is not None:
+                urls_to_follow.extend(host_filter.filter(domain_urls))
             else:
-                urls_to_follow.extend(all_unique_urls)
+                fallback = self._default_filter(domain)
+                urls_to_follow.extend(fallback.filter(domain_urls))
 
         log.info(
             f"[+] found {len(urls_to_follow)} urls to follow "
             f"(from total {len(all_unique_urls)})"
         )
         return urls_to_follow
+
+    def _find_host_filter(self, domain: str) -> Optional[UrlFilter]:
+        """Look up a UrlFilter whose registered domain matches."""
+        for urlfilter in self.url_filters.values():
+            if urlfilter.domain == domain:
+                return urlfilter
+        return None
+
+    def _default_filter(self, domain: str) -> UrlFilter:
+        """Create a restrictive filter for an unknown domain."""
+        return UrlFilter(
+            hostname=domain,
+            domain=domain,
+            subdomain="",
+            venture=False,
+            follow_paths=None,
+        )
 
     async def retrieve_sites(
         self, urls: List[str]
@@ -148,6 +176,18 @@ class Crawler:
 
         depth = 0
         while url_pool and depth <= self.search_depth:
+            clean_pool: list[str] = []
+            for url in url_pool:
+                canon = canonicalize_url(url)
+                if canon not in self.visited:
+                    self.visited.add(canon)
+                    clean_pool.append(url)
+            url_pool = clean_pool
+
+            if not url_pool:
+                log.info("no unvisited URLs remain, stopping")
+                break
+
             responses, failures = await self.retrieve_sites(url_pool)
             log.info(
                 f"depth {depth}: scraped {len(responses)} pages, "
