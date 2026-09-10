@@ -132,17 +132,13 @@ class UrlFilter:
         return urlparse(url).scheme in ["https", "http"]
 
     def is_valid_domain(self, url: str) -> bool:
-        """ignore offsite urls"""
+        """ignore offsite urls (same registered domain = on-site)"""
         parsed = tldextract.extract(url)
-        return (
-            parsed.registered_domain == self.domain
-            and parsed.subdomain == self.subdomain
-        )
+        return parsed.registered_domain == self.domain
 
     def is_related(self, url: str) -> bool:
-        """whether the domains are related"""
-        domain = get_domain(url)
-        return self.domain == domain
+        """whether the domains are related (same registered domain)"""
+        return get_domain(url) == self.domain
 
     def is_valid_path(self, url: str) -> bool:
         """ignore urls of undesired paths"""
@@ -163,19 +159,14 @@ class UrlFilter:
         filtered_urls = []
         for url in urls:
             if not self.is_valid_scheme(url):
-                log.debug(f"drop ignored scheme {url}")
                 continue
             if not self.venture and not self.is_valid_domain(url):
-                log.debug(f"drop offsite url {url}")
                 continue
             if not self.is_valid_ext(url):
-                log.debug(f"drop ignored extension {url}")
                 continue
             if not self.is_valid_path(url):
-                log.debug(f"drop ignored path {url}")
                 continue
             if not self.is_new(url):
-                log.debug(f"drop duplicate {url}")
                 continue
             self.seen.add(canonicalize_url(url))
             filtered_urls.append(url)
@@ -206,7 +197,7 @@ def generate_url_filters(
 
 def get_domain(url: str) -> str:
     extracted = tldextract.extract(url)
-    return extracted.domain if extracted.subdomain else ""
+    return extracted.registered_domain
 
 
 def get_subdomain(url: str) -> str:

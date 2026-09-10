@@ -25,18 +25,18 @@ class SeedData(BaseModel):
     outfile: str
 
 
-def get_starting_data() -> dict:
+def get_starting_data() -> SeedData:
     """
     Opens and returns the contents of seed-data.json file.
     This file is used for the web crawler's discovery mode.
 
-    Expects something like:
+    Expects a JSON file with the following structure:
     ```
     {
         "home": "",
         "urls": [],
         "keywords": [],
-        "search-depth": 0,
+        "search_depth": 0,
         "outfile": ""
     }
     ```
@@ -46,10 +46,10 @@ def get_starting_data() -> dict:
         raise FileNotFoundError(f"seed file not found at {seed_file}")
 
     with open(seed_file, "r") as f:
-        seed_data: dict = json.load(fp=f)
+        sd: dict = json.load(fp=f)
 
     try:
-        _ = SeedData(**seed_data)
+        seed_data = SeedData(**sd)
     except Exception as e:
         raise ValueError(f"Invalid seed-data.json format: {e}")
 
@@ -127,8 +127,11 @@ class DataHandler:
         if output_format not in ("json", "csv"):
             raise ValueError("Invalid format. Use 'json' or 'csv'.")
 
-        self.output_format = output_format.lower()
-        self.output_file = f"{output_file_name}.{self.output_format}"
+        if output_format in output_file_name:
+            self.output_file = output_file_name
+        else:
+            self.output_format = output_format.lower()
+            self.output_file = f"{output_file_name}.{self.output_format}"
 
     def store(self, data: Dict[str, Any]) -> None:
         """Cache a single result dict for later export."""

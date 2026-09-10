@@ -20,7 +20,19 @@ The default `CMD` runs `crawler.py`. Override it with `docker compose run --rm c
 pip install -r requirements.txt
 ```
 
-Configure `seed-data.json` with target URLs and optional keywords/search-depth/outfile, then run:
+Create and configure a JSON file `seed-data.json` with target URLs and optional keywords/search-depth/outfile:
+
+```json
+{
+    "home": "",
+    "urls": [],
+    "keywords": [],
+    "search-depth": 0,
+    "outfile": ""
+}
+```
+
+Then run:
 
 ```bash
 python scrape.py          # single-page extraction
